@@ -320,55 +320,44 @@ with tab4:
 with tab5:
     st.header("CBCT CatPHAN")
 
-    # Accetta solo file ZIP
-    catphan_input = st.file_uploader("Carica file ZIP contenente immagini CatPhan504", type=["zip"])
+    uploaded_file = st.file_uploader("Carica un file ZIP contenente immagini DICOM", type="zip")
 
-    if catphan_input and st.button("Esegui analisi CatPHAN"):
-        import zipfile
-        import tempfile
-        import os
+    if uploaded_file:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Salva lo ZIP
+            zip_path = os.path.join(temp_dir, "upload.zip")
+            with open(zip_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
 
-        if catphan_input.type == "application/zip" or catphan_input.name.endswith(".zip"):
-            with tempfile.TemporaryDirectory() as temp_dir:
-                zip_path = os.path.join(temp_dir, "catphan.zip")
-                with open(zip_path, "wb") as f:
-                    f.write(catphan_input.getbuffer())
-                try:
-                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-                        zip_ref.extractall(temp_dir)
+            # Estrai lo ZIP
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+            except zipfile.BadZipFile:
+                st.error("Il file caricato non è un archivio ZIP valido.")
+                return
 
-                    dicom_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
-                                   if f.lower().endswith('.dcm')]
+            # Cerca file DICOM (.dcm) ricorsivamente
+            dicom_files = []
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    if file.lower().endswith('.dcm'):
+                        dicom_files.append(os.path.join(root, file))
 
-                    if not dicom_files:
-                        st.error("Nessun file DICOM trovato nello ZIP.")
-                    else:
-                        cp = CatPhan504(dicom_files)
-                        cp.analyze()
-                        risultati = cp.results()
+            if not dicom_files:
+                st.error("Nessun file DICOM trovato nello ZIP.")
+                return
 
-                        st.text(risultati)
-                        cp.plot_analyzed_image()
-                        st.pyplot(plt.gcf())
-                        plt.clf()
+            st.success(f"Trovati {len(dicom_files)} file DICOM.")
 
-                        if utente.strip():
-                            report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
-                            st.download_button(
-                                "📥 Scarica Report CBCT CatPHAN PDF",
-                                data=report_pdf,
-                                file_name="QA_Report_CBCT_CatPHAN.pdf",
-                                mime="application/pdf"
-                            )
-                        else:
-                            st.warning("Inserisci il nome utente per generare il report.")
-                except zipfile.BadZipFile:
-                    st.error("Il file caricato non è un file ZIP valido.")
-                except Exception as e:
-                    st.error(f"Errore durante l'analisi CatPHAN: {e}")
-        else:
-            # Non accettiamo file singoli dcm, quindi errore se non è ZIP
-            st.error("Carica un file ZIP contenente i file DICOM per l'analisi.")
+            # Visualizza qualche info del primo DICOM
+            try:
+                ds = pydicom.dcmread(dicom_files[0])
+                st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
+                st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
+                st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
+            except Exception as e:
+                st.error(f"Errore nella lettura del file DICOM: {e}")
 
 
 
