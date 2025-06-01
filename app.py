@@ -64,7 +64,7 @@ def inserisci_logo_pdf(c, logo_path, page_width, page_height):
     y = page_height - hsize - 50
     c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
 
-def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia, extra_figures=None):
+def crea_report_pdf_senza_immagini(titolo, risultati, utente, linac, energia):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -93,55 +93,10 @@ def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia, extr
         text_obj.textLine(line)
     c.drawText(text_obj)
 
-    try:
-        if hasattr(pylinac_obj, "save_analyzed_image"):
-            img_temp_path = tempfile.mktemp(suffix=".png")
-            pylinac_obj.save_analyzed_image(img_temp_path)
-            c.showPage()
-            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
-            os.remove(img_temp_path)
-        elif hasattr(pylinac_obj, "plot_analyzed_image"):
-            pylinac_obj.plot_analyzed_image()
-            img_temp_path = tempfile.mktemp(suffix=".png")
-            plt.savefig(img_temp_path)
-            plt.clf()
-            c.showPage()
-            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
-            os.remove(img_temp_path)
-        elif isinstance(pylinac_obj, WinstonLutz):
-            pylinac_obj.plot_images()
-            img_temp_path_main = tempfile.mktemp(suffix=".png")
-            plt.savefig(img_temp_path_main)
-            plt.clf()
-            c.showPage()
-            c.drawImage(ImageReader(img_temp_path_main), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
-            os.remove(img_temp_path_main)
-
-            for img in pylinac_obj.images:
-                img.plot()
-                img_temp_path = tempfile.mktemp(suffix=".png")
-                plt.savefig(img_temp_path)
-                plt.clf()
-                c.showPage()
-                c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
-                os.remove(img_temp_path)
-        else:
-            raise AttributeError("L'oggetto pylinac non supporta la generazione di immagini.")
-    except Exception as e:
-        st.error(f"Errore nell'inserimento immagine nel PDF: {e}")
-
-    if extra_figures:
-        for fig in extra_figures:
-            img_temp_path = tempfile.mktemp(suffix=".png")
-            fig.savefig(img_temp_path)
-            plt.close(fig)
-            c.showPage()
-            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
-            os.remove(img_temp_path)
-
     c.save()
     buffer.seek(0)
     return buffer
+
 
 
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
