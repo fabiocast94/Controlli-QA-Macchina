@@ -319,31 +319,84 @@ with tab4:
 
 with tab5:
     st.header("CBCT CatPHAN")
-    catphan_img = st.file_uploader("Carica immagine CatPhan504.dcm", type=["dcm"])
 
-    if catphan_img and st.button("Esegui analisi CatPHAN"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
-            f.write(catphan_img.getbuffer())
+    catphan_input = st.file_uploader("Carica immagine CatPhan504 (file .dcm o .zip)", type=["dcm", "zip"])
 
-        cp = CatPhan504(f.name)
-        cp.analyze()
-        risultati = cp.results()
+    if catphan_input and st.button("Esegui analisi CatPHAN"):
+        import zipfile
+        import tempfile
+        import os
 
-        st.text(risultati)
-        cp.plot_analyzed_image()
-        st.pyplot(plt.gcf())
-        plt.clf()
+        if catphan_input.type == "application/zip" or catphan_input.name.endswith(".zip"):
+            with tempfile.TemporaryDirectory() as temp_dir:
+                zip_path = os.path.join(temp_dir, "catphan.zip")
+                with open(zip_path, "wb") as f:
+                    f.write(catphan_input.getbuffer())
+                try:
+                    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                        zip_ref.extractall(temp_dir)
 
-        if utente:
-            report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
-            st.download_button(
-                "📥 Scarica Report CBCT CatPHAN PDF",
-                data=report_pdf,
-                file_name="QA_Report_CBCT_CatPHAN.pdf",
-                mime="application/pdf"
-            )
+                    dicom_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
+                                   if f.lower().endswith('.dcm')]
+
+                    if not dicom_files:
+                        st.error("Nessun file DICOM trovato nello ZIP.")
+                    else:
+                        cp = CatPhan504(dicom_files)
+                        cp.analyze()
+                        risultati = cp.results()
+
+                        st.text(risultati)
+                        cp.plot_analyzed_image()
+                        st.pyplot(plt.gcf())
+                        plt.clf()
+
+                        if utente.strip():
+                            report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
+                            st.download_button(
+                                "📥 Scarica Report CBCT CatPHAN PDF",
+                                data=report_pdf,
+                                file_name="QA_Report_CBCT_CatPHAN.pdf",
+                                mime="application/pdf"
+                            )
+                        else:
+                            st.warning("Inserisci il nome utente per generare il report.")
+                except zipfile.BadZipFile:
+                    st.error("Il file caricato non è un file ZIP valido.")
+                except Exception as e:
+                    st.error(f"Errore durante l'analisi CatPHAN: {e}")
         else:
-            st.warning("Inserisci il nome utente per generare il report.")
+            # Caso file singolo .dcm
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+                f.write(catphan_input.getbuffer())
+                temp_path = f.name
+
+            try:
+                cp = CatPhan504(temp_path)
+                cp.analyze()
+                risultati = cp.results()
+
+                st.text(risultati)
+                cp.plot_analyzed_image()
+                st.pyplot(plt.gcf())
+                plt.clf()
+
+                if utente.strip():
+                    report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
+                    st.download_button(
+                        "📥 Scarica Report CBCT CatPHAN PDF",
+                        data=report_pdf,
+                        file_name="QA_Report_CBCT_CatPHAN.pdf",
+                        mime="application/pdf"
+                    )
+                else:
+                    st.warning("Inserisci il nome utente per generare il report.")
+            except Exception as e:
+                st.error(f"Errore durante l'analisi CatPHAN: {e}")
+            finally:
+                if os.path.exists(temp_path):
+                    os.remove(temp_path)
+
 
 with tab6:
     st.header("Winston Lutz")
