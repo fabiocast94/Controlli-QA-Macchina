@@ -1,0 +1,7 @@
+streamlit
+pydicom
+numpy
+matplotlib
+Pillow
+pylinac
+reportlab
