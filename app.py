@@ -351,6 +351,8 @@ with tab6:
 
     if wl_zip and st.button("Esegui analisi Winston Lutz"):
         import zipfile
+        import tempfile
+        import os
 
         with tempfile.TemporaryDirectory() as temp_dir:
             zip_path = os.path.join(temp_dir, "winston_lutz.zip")
@@ -358,17 +360,18 @@ with tab6:
                 f.write(wl_zip.getbuffer())
 
             try:
+                # Estrai i file dallo ZIP nella cartella temporanea
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
 
-                # Filtro per prendere solo i file DICOM estratti
+                # Filtra solo i file DICOM (.dcm)
                 dicom_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
                                if f.lower().endswith('.dcm')]
 
                 if not dicom_files:
                     st.error("Nessun file DICOM trovato nello ZIP.")
                 else:
-                    # Puoi passare la lista di file DICOM direttamente a WinstonLutz
+                    # Esegui analisi WinstonLutz con la lista di file DICOM
                     wl = WinstonLutz(dicom_files)
                     wl.analyze()
                     risultati = wl.results()
@@ -393,6 +396,7 @@ with tab6:
                 st.error("Il file caricato non è un file ZIP valido.")
             except Exception as e:
                 st.error(f"Errore durante l'analisi Winston Lutz: {e}")
+
 
 
 with tab7:
