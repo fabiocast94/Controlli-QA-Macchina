@@ -1,9 +1,10 @@
+# IMPORT
 import numpy as np
-import pydicom
-import math
 from pylinac.core.image import DicomImage
 import streamlit as st
-from pylinac import DRMLC, DRGS, PicketFence, Starshot, CatPhan504, WinstonLutz, FieldAnalysis
+from pylinac import DRMLC
+import matplotlib.pyplot as plt
+from pylinac import DRGS, PicketFence, Starshot, CatPhan504, WinstonLutz, FieldAnalysis
 from pylinac.field_analysis import Interpolation, Normalization, Centering
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -14,22 +15,18 @@ import datetime
 import os
 from io import BytesIO
 import tempfile
-import matplotlib.pyplot as plt
-import base64   # <-- questa riga serve
-
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 # CONFIGURAZIONE PAGINA
 st.set_page_config(page_title="Controlli Qualità LINAC", layout="wide")
 
-# PATH LOGO
-logo_file_path = "logo.png"
-
-# --- FUNZIONI ---
+# LOGO + TITOLO
+logo_file_path = r"C:\\Users\\fabio\\Desktop\\Applicazione Annuali QA\\logo.png"
 
 def mostra_logo_e_titolo(logo_path, titolo):
     logo = Image.open(logo_path)
+    import base64
     buffered = BytesIO()
     logo.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode()
@@ -44,11 +41,19 @@ def mostra_logo_e_titolo(logo_path, titolo):
         unsafe_allow_html=True
     )
 
+mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
+
+# DATI GENERALI
+utente = st.text_input("Nome Utente")
+linac = st.selectbox("Seleziona Linac", ["Linac1", "Edge", "Linac3", "Linac4", "STx"])
+energia = st.selectbox("Seleziona Energia", ["6 MV", "10 MV", "15 MV", "6 FFF", "10 FFF"])
+
+# FUNZIONE PDF
 def inserisci_logo_pdf(c, logo_path, page_width, page_height):
     logo = Image.open(logo_path)
     max_width = page_width * 0.6
     wpercent = max_width / float(logo.size[0])
-    hsize = int(float(logo.size[1]) * wpercent)
+    hsize = int((float(logo.size[1]) * float(wpercent)))
     logo = logo.resize((int(max_width), hsize), Image.Resampling.LANCZOS)
 
     img_io = BytesIO()
@@ -58,7 +63,7 @@ def inserisci_logo_pdf(c, logo_path, page_width, page_height):
     y = page_height - hsize - 50
     c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
 
-def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia):
+def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia, extra_figures=None):
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
@@ -66,6 +71,7 @@ def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia):
     inserisci_logo_pdf(c, logo_file_path, width, height)
 
     y_start = height - 180
+
     c.setFont("Helvetica-Bold", 14)
     c.drawString(50, y_start, f"Controlli Qualità LINAC - {titolo}")
     c.setFont("Helvetica", 12)
@@ -78,89 +84,96 @@ def crea_report_pdf(titolo, risultati, pylinac_obj, utente, linac, energia):
     c.drawString(50, y_start - 110, "Risultati Analisi:")
     c.setFont("Courier", 10)
     text_obj = c.beginText(50, y_start - 130)
-
     for line in risultati.splitlines():
         if text_obj.getY() < 50:
             c.drawText(text_obj)
             c.showPage()
             text_obj = c.beginText(50, height - 50)
         text_obj.textLine(line)
-
     c.drawText(text_obj)
+
+    try:
+        if hasattr(pylinac_obj, "save_analyzed_image"):
+            img_temp_path = tempfile.mktemp(suffix=".png")
+            pylinac_obj.save_analyzed_image(img_temp_path)
+            c.showPage()
+            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
+            os.remove(img_temp_path)
+        elif hasattr(pylinac_obj, "plot_analyzed_image"):
+            pylinac_obj.plot_analyzed_image()
+            img_temp_path = tempfile.mktemp(suffix=".png")
+            plt.savefig(img_temp_path)
+            plt.clf()
+            c.showPage()
+            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
+            os.remove(img_temp_path)
+        elif isinstance(pylinac_obj, WinstonLutz):
+            pylinac_obj.plot_images()
+            img_temp_path_main = tempfile.mktemp(suffix=".png")
+            plt.savefig(img_temp_path_main)
+            plt.clf()
+            c.showPage()
+            c.drawImage(ImageReader(img_temp_path_main), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
+            os.remove(img_temp_path_main)
+
+            for img in pylinac_obj.images:
+                img.plot()
+                img_temp_path = tempfile.mktemp(suffix=".png")
+                plt.savefig(img_temp_path)
+                plt.clf()
+                c.showPage()
+                c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
+                os.remove(img_temp_path)
+        else:
+            raise AttributeError("L'oggetto pylinac non supporta la generazione di immagini.")
+    except Exception as e:
+        st.error(f"Errore nell'inserimento immagine nel PDF: {e}")
+
+    if extra_figures:
+        for fig in extra_figures:
+            img_temp_path = tempfile.mktemp(suffix=".png")
+            fig.savefig(img_temp_path)
+            plt.close(fig)
+            c.showPage()
+            c.drawImage(ImageReader(img_temp_path), 50, 50, width=width - 100, height=height - 100, preserveAspectRatio=True, anchor='c')
+            os.remove(img_temp_path)
+
     c.save()
     buffer.seek(0)
     return buffer
 
-def get_profile(ds):
-    img = ds.pixel_array.astype(float)
-    center_row = img.shape[0] // 2
-    return img[center_row, :]
 
-def find_dose_at_distance(profile, pixel_spacing_cm, wdistL):
-    center_pixel = len(profile) // 2
-    half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
-
-    left_index = max(center_pixel - half_dist_pix, 0)
-    right_index = min(center_pixel + half_dist_pix, len(profile) - 1)
-
-    D1 = profile[left_index]
-    D2 = profile[right_index]
-    return D1, D2, left_index, right_index
-
-def calculate_theta(D1, D2, u, wdistL):
-    if D1 <= 0 or D2 <= 0:
-        raise ValueError("Dose D1 e D2 devono essere positivi")
-    ln_ratio = math.log(D1 / D2)
-    theta_rad = math.atan(ln_ratio / (u * wdistL))
-    return math.degrees(theta_rad)
-
-def plot_profile(profile, left_idx, right_idx):
-    fig, ax = plt.subplots(figsize=(10, 5))
-    ax.plot(profile, label='Profilo dose')
-    ax.scatter([left_idx, right_idx], [profile[left_idx], profile[right_idx]], color='red', label='D1 e D2')
-    ax.axvline(x=len(profile)//2, color='gray', linestyle='--', label='Centro')
-    ax.set_title('Profilo dose EPID')
-    ax.set_xlabel('Pixel')
-    ax.set_ylabel('Dose (counts)')
-    ax.legend()
-    ax.grid(True)
-    return fig
-    
-def number_input_with_key(label, key_suffix, **kwargs):
-    return st.number_input(label, key=f"{label}_{key_suffix}", **kwargs)
-
-# --- INIZIO UI ---
-
-mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
-
-utente = st.text_input("Nome Utente")
-linac = st.selectbox("Seleziona Linac", ["Linac1", "Edge", "Linac3", "Linac4", "STx"])
-energia = st.selectbox("Seleziona Energia", ["6 MV", "10 MV", "15 MV", "6 FFF", "10 FFF"])
-
-tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "Dose Rate Gantry Speed",
     "Dose Rate Leaf Speed",
     "Picket Fence",
     "Star Shot",
     "CBCT CatPhan",
-    "Winston Lutz",
-    "Field Analysis",
-    "Wedge Analysis"
+    "Wiston Lutz",
+    "Field Analysis"
 ])
 
-# -- TAB 1: Dose Rate Gantry Speed --
 with tab1:
     st.header("Dose Rate Gantry Speed (DRGS)")
+
     open_img = st.file_uploader("Carica immagine Open.dcm", type=["dcm"], key="drgs_open")
     dmlc_img = st.file_uploader("Carica immagine Field.dcm", type=["dcm"], key="drgs_field")
-    tolerance = number_input_with_key("Tolleranza (%)", "drgs", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
-    roi_width = number_input_with_key("Larghezza ROI (mm)", "drgs", min_value=5, max_value=50, value=10, step=1)
-    roi_height = number_input_with_key("Altezza ROI (mm)", "drgs", min_value=50, max_value=300, value=150, step=5)
-    shift_roi = number_input_with_key("Shift globale ROI (mm)", "drgs", min_value=-100, max_value=100, value=0, step=1)
-    # resto del codice invariato ...
+
+    tolerance = st.number_input("Tolleranza (%)", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
+    roi_width = st.number_input("Larghezza ROI (mm)", min_value=5, max_value=50, value=10, step=1)
+    roi_height = st.number_input("Altezza ROI (mm)", min_value=50, max_value=300, value=150, step=5)
+
+    shift_roi = st.number_input("Shift globale ROI (mm)", min_value=-100, max_value=100, value=0, step=1)
+
+    # Definisci posizione base delle ROI, ad esempio posizioni relative (in mm)
+    base_offsets = [-50, -38, -25, -10, 3, 17, 30]  # Oppure un metodo per calcolare la posizione base rispetto all’immagine
+    # O puoi definire in modo più dinamico tipo equidistanti intorno allo zero
+    # Ad esempio:
     n_roi = 7
     spacing = 15
     base_offsets = [spacing * (i - n_roi // 2) for i in range(n_roi)]
+
+    # Calcola l'offset totale sommando shift globale
     custom_roi_config = {f"ROI {i+1}": {"offset_mm": base_offsets[i] + shift_roi} for i in range(n_roi)}
 
     if open_img and dmlc_img and st.button("Esegui analisi DRGS"):
@@ -168,54 +181,52 @@ with tab1:
              tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_field:
             f_open.write(open_img.getbuffer())
             f_field.write(dmlc_img.getbuffer())
-            f_open.flush()
-            f_field.flush()
 
-            drgs = DRGS(image_paths=(f_open.name, f_field.name))
-            drgs.default_roi_config = custom_roi_config
-            drgs.analyze(tolerance=tolerance, segment_size_mm=(roi_width, roi_height))
+        drgs = DRGS(image_paths=(f_open.name, f_field.name))
+        drgs.default_roi_config = custom_roi_config
 
-            risultati = drgs.results()
-            st.text(risultati)
-            drgs.plot_analyzed_image()
-            st.pyplot(plt.gcf())
-            plt.clf()
+        segment_size_mm = (roi_width, roi_height)
+        drgs.analyze(tolerance=tolerance, segment_size_mm=segment_size_mm)
 
-            if utente.strip():
-                report_pdf = crea_report_pdf("Dose Rate Gantry Speed", risultati, drgs, utente, linac, energia)
-                st.download_button("📥 Scarica Report DRGS PDF", data=report_pdf,
-                                   file_name="QA_Report_DRGS.pdf", mime="application/pdf")
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
+        risultati = drgs.results()
+        st.text(risultati)
+        drgs.plot_analyzed_image()
+        st.pyplot(plt.gcf())
+        plt.clf()
 
-# -- TAB 2: Dose Rate Leaf Speed --
+        if utente:
+            report_pdf = crea_report_pdf("Dose Rate Gantry Speed", risultati, drgs, utente, linac, energia)
+            st.download_button(
+                "📥 Scarica Report DRGS PDF",
+                data=report_pdf,
+                file_name="QA_Report_DRGS.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.warning("Inserisci il nome utente per generare il report.")
+
+
+
+
 with tab2:
     st.header("Dose Rate Leaf Speed (DRMLC)")
-    open_img = st.file_uploader("Carica immagine Open.dcm", type=["dcm"], key="drmlc_open")
-    dmlc_img = st.file_uploader("Carica immagine Field.dcm", type=["dcm"], key="drmlc_field")
-    tolerance = number_input_with_key("Tolleranza (%)", "drmlc", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
-    roi_width = number_input_with_key("Larghezza ROI (mm)", "drmlc", min_value=5, max_value=50, value=15, step=1)
-    roi_height = number_input_with_key("Altezza ROI (mm)", "drmlc", min_value=50, max_value=300, value=150, step=5)
-    shift_roi = number_input_with_key("Shift globale ROI (mm)", "drmlc", min_value=-100, max_value=100, value=0, step=1)
-    # resto invariato ...
-    n_roi = 9
-    spacing = 15
-    base_offsets = [spacing * (i - n_roi // 2) for i in range(n_roi)]
-    custom_roi_config = {f"ROI {i+1}": {"offset_mm": base_offsets[i] + shift_roi} for i in range(n_roi)}
 
-    if open_img and dmlc_img and st.button("Esegui analisi DRMLC"):
+    open_img = st.file_uploader("Carica immagine Open Field (DICOM)", type=["dcm"], key="drmlc_open")
+    mlc_img = st.file_uploader("Carica immagine MLC Field (DICOM)", type=["dcm"], key="drmlc_mlc")
+
+    tolerance = st.number_input("Tolleranza (%)", min_value=0.5, max_value=10.0, value=3.0, step=0.5)
+
+    if open_img and mlc_img and st.button("Esegui analisi DRLS"):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_open, \
-             tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_field:
+             tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_mlc:
             f_open.write(open_img.getbuffer())
-            f_field.write(dmlc_img.getbuffer())
-            f_open.flush()
-            f_field.flush()
+            f_mlc.write(mlc_img.getbuffer())
 
-            drmlc = DRMLC(image_paths=(f_open.name, f_field.name))
-            drmlc.default_roi_config = custom_roi_config
-            drmlc.analyze(tolerance=tolerance, segment_size_mm=(roi_width, roi_height))
-
+        try:
+            drmlc = DRMLC((f_open.name, f_mlc.name))
+            drmlc.analyze(tolerance=tolerance)
             risultati = drmlc.results()
+
             st.text(risultati)
             drmlc.plot_analyzed_image()
             st.pyplot(plt.gcf())
@@ -223,26 +234,41 @@ with tab2:
 
             if utente.strip():
                 report_pdf = crea_report_pdf("Dose Rate Leaf Speed", risultati, drmlc, utente, linac, energia)
-                st.download_button("📥 Scarica Report DRMLC PDF", data=report_pdf,
-                                   file_name="QA_Report_DRMLC.pdf", mime="application/pdf")
+                st.download_button(
+                    "📥 Scarica Report DRLS PDF",
+                    data=report_pdf,
+                    file_name="QA_Report_DRLS.pdf",
+                    mime="application/pdf"
+                )
             else:
                 st.warning("Inserisci il nome utente per generare il report.")
+        except Exception as e:
+            st.error(f"Errore durante l'analisi DRLS: {e}")
 
-# -- TAB 3: Picket Fence --
+
+
 with tab3:
+    from pylinac.picketfence import MLC
+
     st.header("Picket Fence")
-    dmlc_img = st.file_uploader("Carica immagine PicketFence.dcm", type=["dcm"], key="picket")
-    tolerance = number_input_with_key("Tolleranza (%)", "picket", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
-    # resto invariato ...
-    if dmlc_img and st.button("Esegui analisi Picket Fence"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_picket:
-            f_picket.write(dmlc_img.getbuffer())
-            f_picket.flush()
+    pf_img = st.file_uploader("Carica immagine PicketFence.dcm", type=["dcm"])
 
-            pf = PicketFence(f_picket.name)
-            pf.analyze(tolerance=tolerance)
+    # ✅ Aggiunta selezione tipo di MLC
+    mlc_type_label = st.selectbox("Seleziona tipo di MLC", ["Millennium", "HD Millennium"])
+    mlc_type = MLC.MILLENNIUM if mlc_type_label == "Millennium" else MLC.HD_MILLENNIUM
 
+    tolerance = st.number_input("Tolleranza (mm)", min_value=0.01, max_value=1.0, value=0.15, step=0.01)
+    action_tolerance = st.number_input("Action tolerance (mm)", min_value=0.01, max_value=1.0, value=0.03, step=0.01)
+
+    if pf_img and st.button("Esegui analisi Picket Fence"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+            f.write(pf_img.getbuffer())
+
+        try:
+            pf = PicketFence(f.name, mlc=mlc_type)
+            pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
             risultati = pf.results()
+
             st.text(risultati)
             pf.plot_analyzed_image()
             st.pyplot(plt.gcf())
@@ -250,106 +276,156 @@ with tab3:
 
             if utente.strip():
                 report_pdf = crea_report_pdf("Picket Fence", risultati, pf, utente, linac, energia)
-                st.download_button("📥 Scarica Report Picket Fence PDF", data=report_pdf,
-                                   file_name="QA_Report_PicketFence.pdf", mime="application/pdf")
+                st.download_button(
+                    "📥 Scarica Report Picket Fence PDF",
+                    data=report_pdf,
+                    file_name="QA_Report_PicketFence.pdf",
+                    mime="application/pdf"
+                )
             else:
                 st.warning("Inserisci il nome utente per generare il report.")
+        except Exception as e:
+            st.error(f"Errore durante l'analisi Picket Fence: {e}")
 
-# -- TAB 4: Star Shot --
 with tab4:
     st.header("Star Shot")
-    starshot_img = st.file_uploader("Carica immagine StarShot.dcm", type=["dcm"], key="starshot")
-    tolerance = number_input_with_key("Tolleranza (mm)", "starshot", min_value=0.01, max_value=5.0, value=0.3, step=0.01)
-    # resto invariato ...
-    if starshot_img and st.button("Esegui analisi Star Shot"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_star:
-            f_star.write(starshot_img.getbuffer())
-            f_star.flush()
+    star_img = st.file_uploader("Carica immagine Starshot (TIFF)", type=["tif", "tiff"])
+    sid_value = st.number_input("SID (mm)", min_value=100, max_value=2000, value=1000)
+    tolerance = st.number_input("Tolleranza", min_value=0.1, max_value=5.0, value=0.8, step=0.1)
 
-            ss = Starshot(f_star.name)
-            ss.analyze(tolerance=tolerance)
+    if star_img and st.button("Esegui analisi Star Shot"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".tif") as f:
+            f.write(star_img.getbuffer())
 
-            risultati = ss.results()
-            st.text(risultati)
-            ss.plot_analyzed_image()
-            st.pyplot(plt.gcf())
-            plt.clf()
+        ss = Starshot(f.name, sid=sid_value)
+        ss.analyze(tolerance=tolerance)
+        risultati = ss.results()
 
-            if utente.strip():
-                report_pdf = crea_report_pdf("Star Shot", risultati, ss, utente, linac, energia)
-                st.download_button("📥 Scarica Report Star Shot PDF", data=report_pdf,
-                                   file_name="QA_Report_StarShot.pdf", mime="application/pdf")
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
+        st.text(risultati)
+        ss.plot_analyzed_image()
+        st.pyplot(plt.gcf())
+        plt.clf()
 
-# -- TAB 5: CatPhan504 (CBCT) --
+        if utente:
+            report_pdf = crea_report_pdf("Star Shot", risultati, ss, utente, linac, energia)
+            st.download_button(
+                "📥 Scarica Report Star Shot PDF",
+                data=report_pdf,
+                file_name="QA_Report_StarShot.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.warning("Inserisci il nome utente per generare il report.")
+
 with tab5:
-    st.header("CBCT CatPhan504")
-    catphan_img = st.file_uploader("Carica immagine CatPhan504.dcm", type=["dcm"], key="catphan")
-    tolerance_contrast = number_input_with_key("Tolleranza Contrasto (%)", "catphan", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
-    tolerance_uniformity = number_input_with_key("Tolleranza Uniformità (%)", "catphan", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
-    # resto invariato ...
-    if catphan_img and st.button("Esegui analisi CatPhan"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_catphan:
-            f_catphan.write(catphan_img.getbuffer())
-            f_catphan.flush()
+    st.header("CBCT CatPHAN")
+    catphan_img = st.file_uploader("Carica immagine CatPhan504.dcm", type=["dcm"])
 
-            cp = CatPhan504(f_catphan.name)
-            cp.analyze()
-            risultati = cp.results()
-            st.text(risultati)
-            cp.plot_analyzed_image()
-            st.pyplot(plt.gcf())
-            plt.clf()
+    if catphan_img and st.button("Esegui analisi CatPHAN"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+            f.write(catphan_img.getbuffer())
 
-            if utente.strip():
-                report_pdf = crea_report_pdf("CatPhan504", risultati, cp, utente, linac, energia)
-                st.download_button("📥 Scarica Report CatPhan504 PDF", data=report_pdf,
-                                   file_name="QA_Report_CatPhan504.pdf", mime="application/pdf")
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
+        cp = CatPhan504(f.name)
+        cp.analyze()
+        risultati = cp.results()
 
-# -- TAB 6: Winston Lutz --
+        st.text(risultati)
+        cp.plot_analyzed_image()
+        st.pyplot(plt.gcf())
+        plt.clf()
+
+        if utente:
+            report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
+            st.download_button(
+                "📥 Scarica Report CBCT CatPHAN PDF",
+                data=report_pdf,
+                file_name="QA_Report_CBCT_CatPHAN.pdf",
+                mime="application/pdf"
+            )
+        else:
+            st.warning("Inserisci il nome utente per generare il report.")
+
 with tab6:
     st.header("Winston Lutz")
-    wl_img = st.file_uploader("Carica immagine WinstonLutz.dcm", type=["dcm"], key="wl")
-    tolerance = st.number_input("Tolleranza (mm)", min_value=0.01, max_value=5.0, value=1.0, step=0.01)
+    wl_zip = st.file_uploader("Carica file ZIP contenente immagini per Winston-Lutz", type=["zip"])
 
-    if wl_img and st.button("Esegui analisi Winston Lutz"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_wl:
-            f_wl.write(wl_img.getbuffer())
-            f_wl.flush()
+    if wl_zip and st.button("Esegui analisi Winston Lutz"):
+        import zipfile
 
-            wl = WinstonLutz(f_wl.name)
-            wl.analyze(tolerance=tolerance)
-            risultati = wl.results()
-            st.text(risultati)
-            wl.plot_analyzed_image()
-            st.pyplot(plt.gcf())
-            plt.clf()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            zip_path = os.path.join(temp_dir, "winston_lutz.zip")
+            with open(zip_path, "wb") as f:
+                f.write(wl_zip.getbuffer())
 
-            if utente.strip():
-                report_pdf = crea_report_pdf("Winston Lutz", risultati, wl, utente, linac, energia)
-                st.download_button("📥 Scarica Report Winston Lutz PDF", data=report_pdf,
-                                   file_name="QA_Report_WinstonLutz.pdf", mime="application/pdf")
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+
+                # Filtro per prendere solo i file DICOM estratti
+                dicom_files = [os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
+                               if f.lower().endswith('.dcm')]
+
+                if not dicom_files:
+                    st.error("Nessun file DICOM trovato nello ZIP.")
+                else:
+                    # Puoi passare la lista di file DICOM direttamente a WinstonLutz
+                    wl = WinstonLutz(dicom_files)
+                    wl.analyze()
+                    risultati = wl.results()
+
+                    st.text(risultati)
+                    wl.plot_images()
+                    st.pyplot(plt.gcf())
+                    plt.clf()
+
+                    if utente.strip():
+                        report_pdf = crea_report_pdf("Winston Lutz", risultati, wl, utente, linac, energia)
+                        st.download_button(
+                            "📥 Scarica Report Winston Lutz PDF",
+                            data=report_pdf,
+                            file_name="QA_Report_WinstonLutz.pdf",
+                            mime="application/pdf"
+                        )
+                    else:
+                        st.warning("Inserisci il nome utente per generare il report.")
+
+            except zipfile.BadZipFile:
+                st.error("Il file caricato non è un file ZIP valido.")
+            except Exception as e:
+                st.error(f"Errore durante l'analisi Winston Lutz: {e}")
 
 
-# -- TAB 7: Field Analysis --
 with tab7:
+    import matplotlib.pyplot as plt
+
     st.header("Field Analysis")
-    fa_img = st.file_uploader("Carica immagine FieldAnalysis.dcm", type=["dcm"], key="fa")
-    # qui non hai tolerance quindi no change
 
-    if fa_img and st.button("Esegui analisi Field Analysis"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_fa:
-            f_fa.write(fa_img.getbuffer())
-            f_fa.flush()
+    fa_file = st.file_uploader("Carica immagine FieldAnalysis (DICOM)", type=["dcm"])
 
-            fa = FieldAnalysis(f_fa.name)
+    interpolation = st.selectbox("Interpolazione", options=[i.name for i in Interpolation])
+    normalization = st.selectbox("Normalizzazione", options=[n.name for n in Normalization])
+    centering = st.selectbox("Centering method", options=[c.name for c in Centering])
+
+    # Usa il nome utente già inserito all’inizio (non ridichiararlo)
+    # utente è già definito globalmente
+
+    if fa_file and st.button("Esegui analisi Field Analysis"):
+        import tempfile
+        import os
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+            f.write(fa_file.getbuffer())
+            temp_path = f.name
+
+        try:
+            fa = FieldAnalysis(temp_path)
+            fa.interpolation = Interpolation[interpolation]
+            fa.normalization = Normalization[normalization]
+            fa.centering = Centering[centering]
+
             fa.analyze()
             risultati = fa.results()
+
             st.text(risultati)
             fa.plot_analyzed_image()
             st.pyplot(plt.gcf())
@@ -357,47 +433,18 @@ with tab7:
 
             if utente.strip():
                 report_pdf = crea_report_pdf("Field Analysis", risultati, fa, utente, linac, energia)
-                st.download_button("📥 Scarica Report Field Analysis PDF", data=report_pdf,
-                                   file_name="QA_Report_FieldAnalysis.pdf", mime="application/pdf")
+                st.download_button(
+                    "📥 Scarica Report Field Analysis PDF",
+                    data=report_pdf,
+                    file_name="QA_Report_FieldAnalysis.pdf",
+                    mime="application/pdf"
+                )
             else:
                 st.warning("Inserisci il nome utente per generare il report.")
 
-# -- TAB 8: Wedge Analysis --
-with tab8:
-    st.header("Wedge Analysis")
-    wedge_img = st.file_uploader("Carica immagine EPID.dcm", type=["dcm"], key="wedge")
-    
-    # Questi due input devono essere fuori dal button perché se no non li vedi subito
-    u = number_input_with_key("Parametro u (default 0.5)", "wedge", value=0.5, step=0.1)
-    wdistL = number_input_with_key("Distanza wdistL (mm)", "wedge", min_value=1.0, value=50.0, step=1.0)
+        except Exception as e:
+            st.error(f"Errore durante l'analisi Field Analysis: {e}")
 
-    if wedge_img and st.button("Calcola angolo EPID"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_wedge:
-            f_wedge.write(wedge_img.getbuffer())
-            f_wedge.flush()
-            ds = pydicom.dcmread(f_wedge.name)
-            pixel_spacing = ds.PixelSpacing[0]  # assuming square pixels
-            profile = get_profile(ds)
-
-            try:
-                D1, D2, left_idx, right_idx = find_dose_at_distance(profile, pixel_spacing, wdistL)
-                theta = calculate_theta(D1, D2, u, wdistL / 10)  # convert mm to cm if necessario
-
-                st.write(f"D1: {D1:.2f}")
-                st.write(f"D2: {D2:.2f}")
-                st.write(f"Angolo θ (gradi): {theta:.3f}")
-
-                fig = plot_profile(profile, left_idx, right_idx)
-                st.pyplot(fig)
-                plt.clf()
-
-                if utente.strip():
-                    risultati = f"D1 = {D1:.2f}\nD2 = {D2:.2f}\nAngolo θ = {theta:.3f}°"
-                    report_pdf = crea_report_pdf("Wedge Analysis", risultati, None, utente, linac, energia)
-                    st.download_button("📥 Scarica Report Wedge PDF", data=report_pdf,
-                                       file_name="QA_Report_Wedge.pdf", mime="application/pdf")
-                else:
-                    st.warning("Inserisci il nome utente per generare il report.")
-            except Exception as e:
-                st.error(f"Errore nel calcolo: {e}")
-
+        finally:
+            if os.path.exists(temp_path):
+                os.remove(temp_path)
