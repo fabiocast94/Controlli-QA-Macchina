@@ -64,12 +64,34 @@ def inserisci_logo_pdf(c, logo_path, page_width, page_height):
     y = page_height - hsize - 50
     c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
 
-def crea_report_pdf_senza_immagini(titolo, risultati, utente, linac, energia):
+def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac, energia):
+    from reportlab.pdfgen import canvas
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.utils import ImageReader
+    from PIL import Image
+    import datetime
+    from io import BytesIO
+
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
     width, height = A4
 
-    inserisci_logo_pdf(c, logo_file_path, width, height)
+    # Inserisci logo centrato in alto
+    try:
+        logo = Image.open(logo_file_path)
+        max_width = width * 0.6
+        wpercent = max_width / float(logo.size[0])
+        hsize = int((float(logo.size[1]) * float(wpercent)))
+        logo = logo.resize((int(max_width), hsize), Image.Resampling.LANCZOS)
+        img_io = BytesIO()
+        logo.save(img_io, format="PNG")
+        img_io.seek(0)
+        x = (width - max_width) / 2
+        y = height - hsize - 50
+        c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
+    except Exception as e:
+        # Se fallisce il logo, non bloccare tutto
+        pass
 
     y_start = height - 180
 
@@ -96,6 +118,7 @@ def crea_report_pdf_senza_immagini(titolo, risultati, utente, linac, energia):
     c.save()
     buffer.seek(0)
     return buffer
+
 
 
 
@@ -151,7 +174,7 @@ with tab1:
         plt.clf()
 
         if utente:
-            report_pdf = crea_report_pdf("Dose Rate Gantry Speed", risultati, drgs, utente, linac, energia)
+            report_pdf = crea_report_pdf_senza_immagini("Dose Rate Gantry Speed", risultati, drgs, utente, linac, energia)
             st.download_button(
                 "📥 Scarica Report DRGS PDF",
                 data=report_pdf,
@@ -189,7 +212,7 @@ with tab2:
             plt.clf()
 
             if utente.strip():
-                report_pdf = crea_report_pdf("Dose Rate Leaf Speed", risultati, drmlc, utente, linac, energia)
+                report_pdf = crea_report_pdf_senza_immagini("Dose Rate Leaf Speed", risultati, drmlc, utente, linac, energia)
                 st.download_button(
                     "📥 Scarica Report DRLS PDF",
                     data=report_pdf,
@@ -231,7 +254,7 @@ with tab3:
             plt.clf()
 
             if utente.strip():
-                report_pdf = crea_report_pdf("Picket Fence", risultati, pf, utente, linac, energia)
+                report_pdf = crea_report_pdf_senza_immagini("Picket Fence", risultati, pf, utente, linac, energia)
                 st.download_button(
                     "📥 Scarica Report Picket Fence PDF",
                     data=report_pdf,
@@ -263,7 +286,7 @@ with tab4:
         plt.clf()
 
         if utente:
-            report_pdf = crea_report_pdf("Star Shot", risultati, ss, utente, linac, energia)
+            report_pdf = crea_report_pdf_senza_immagini("Star Shot", risultati, ss, utente, linac, energia)
             st.download_button(
                 "📥 Scarica Report Star Shot PDF",
                 data=report_pdf,
@@ -323,7 +346,7 @@ with tab5:
                         plt.clf()
 
                         if utente.strip():
-                            report_pdf = crea_report_pdf("CBCT CatPhan", risultati, catphan, utente, linac, energia)
+                            report_pdf = crea_report_pdf_senza_immagini("CBCT CatPhan", risultati, catphan, utente, linac, energia)
                             st.download_button(
                                 "📥 Scarica Report CBCT CatPhan PDF",
                                 data=report_pdf,
@@ -376,7 +399,7 @@ with tab6:
                     plt.clf()
 
                     if utente.strip():
-                        report_pdf = crea_report_pdf("Winston Lutz", risultati, wl, utente, linac, energia)
+                        report_pdf = crea_report_pdf_senza_immagini("Winston Lutz", risultati, wl, utente, linac, energia)
                         st.download_button(
                             "📥 Scarica Report Winston Lutz PDF",
                             data=report_pdf,
@@ -430,7 +453,7 @@ with tab7:
             plt.clf()
 
             if utente.strip():
-                report_pdf = crea_report_pdf("Field Analysis", risultati, fa, utente, linac, energia)
+                report_pdf = crea_report_pdf_senza_immagini("Field Analysis", risultati, fa, utente, linac, energia)
                 st.download_button(
                     "📥 Scarica Report Field Analysis PDF",
                     data=report_pdf,
