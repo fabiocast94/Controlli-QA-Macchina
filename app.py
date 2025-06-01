@@ -15,11 +15,7 @@ import datetime
 import os
 from io import BytesIO
 import tempfile
-import streamlit as st
-import zipfile
-import os
-import tempfile
-import pydicom
+
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
@@ -323,46 +319,68 @@ with tab4:
             st.warning("Inserisci il nome utente per generare il report.")
 
 with tab5:
-    st.header("CBCT CatPHAN")
+    st.header("CBCT CatPhan")
 
     uploaded_file = st.file_uploader("Carica un file ZIP contenente immagini DICOM", type="zip")
 
-    if uploaded_file:
+    if uploaded_file and st.button("Esegui analisi CatPhan"):
+        import tempfile
+        import zipfile
+        import os
+        import pydicom
+
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Salva lo ZIP
             zip_path = os.path.join(temp_dir, "upload.zip")
             with open(zip_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
-            # Estrai lo ZIP
             try:
                 with zipfile.ZipFile(zip_path, 'r') as zip_ref:
                     zip_ref.extractall(temp_dir)
             except zipfile.BadZipFile:
                 st.error("Il file caricato non è un archivio ZIP valido.")
-                return
+            else:
+                dicom_files = []
+                for root, _, files in os.walk(temp_dir):
+                    for file in files:
+                        if file.lower().endswith('.dcm'):
+                            dicom_files.append(os.path.join(root, file))
 
-            # Cerca file DICOM (.dcm) ricorsivamente
-            dicom_files = []
-            for root, _, files in os.walk(temp_dir):
-                for file in files:
-                    if file.lower().endswith('.dcm'):
-                        dicom_files.append(os.path.join(root, file))
+                if not dicom_files:
+                    st.error("Nessun file DICOM trovato nello ZIP.")
+                else:
+                    st.success(f"Trovati {len(dicom_files)} file DICOM.")
 
-            if not dicom_files:
-                st.error("Nessun file DICOM trovato nello ZIP.")
-                return
+                    try:
+                        ds = pydicom.dcmread(dicom_files[0])
+                        st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
+                        st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
+                        st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
+                        # Qui puoi aggiungere ulteriori analisi con pylinac CatPhan504
+                        # Esempio base di inizializzazione CatPhan:
+                        catphan = CatPhan504(dicom_files)
+                        catphan.analyze()
+                        risultati = catphan.results()
 
-            st.success(f"Trovati {len(dicom_files)} file DICOM.")
+                        st.text(risultati)
+                        catphan.plot_analyzed_image()
+                        st.pyplot(plt.gcf())
+                        plt.clf()
 
-            # Visualizza qualche info del primo DICOM
-            try:
-                ds = pydicom.dcmread(dicom_files[0])
-                st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
-                st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
-                st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
-            except Exception as e:
-                st.error(f"Errore nella lettura del file DICOM: {e}")
+                        if utente.strip():
+                            report_pdf = crea_report_pdf("CBCT CatPhan", risultati, catphan, utente, linac, energia)
+                            st.download_button(
+                                "📥 Scarica Report CBCT CatPhan PDF",
+                                data=report_pdf,
+                                file_name="QA_Report_CBCT_CatPhan.pdf",
+                                mime="application/pdf"
+                            )
+                        else:
+                            st.warning("Inserisci il nome utente per generare il report.")
+
+                    except Exception as e:
+                        st.error(f"Errore durante l'analisi CBCT CatPhan: {e}")
+
 
 
 
