@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 st.set_page_config(page_title="Controlli Qualità LINAC", layout="wide")
 
 # LOGO + TITOLO
-logo_file_path = r"C:\\Users\\fabio\\Desktop\\Applicazione Annuali QA\\logo.png"
+logo_file_path = "logo.png"
 
 def mostra_logo_e_titolo(logo_path, titolo):
     logo = Image.open(logo_path)
