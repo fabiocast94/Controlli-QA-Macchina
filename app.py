@@ -320,7 +320,8 @@ with tab4:
 with tab5:
     st.header("CBCT CatPHAN")
 
-    catphan_input = st.file_uploader("Carica immagine CatPhan504 (file .dcm o .zip)", type=["dcm", "zip"])
+    # Accetta solo file ZIP
+    catphan_input = st.file_uploader("Carica file ZIP contenente immagini CatPhan504", type=["zip"])
 
     if catphan_input and st.button("Esegui analisi CatPHAN"):
         import zipfile
@@ -366,36 +367,9 @@ with tab5:
                 except Exception as e:
                     st.error(f"Errore durante l'analisi CatPHAN: {e}")
         else:
-            # Caso file singolo .dcm
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
-                f.write(catphan_input.getbuffer())
-                temp_path = f.name
+            # Non accettiamo file singoli dcm, quindi errore se non è ZIP
+            st.error("Carica un file ZIP contenente i file DICOM per l'analisi.")
 
-            try:
-                cp = CatPhan504(temp_path)
-                cp.analyze()
-                risultati = cp.results()
-
-                st.text(risultati)
-                cp.plot_analyzed_image()
-                st.pyplot(plt.gcf())
-                plt.clf()
-
-                if utente.strip():
-                    report_pdf = crea_report_pdf("CBCT CatPHAN", risultati, cp, utente, linac, energia)
-                    st.download_button(
-                        "📥 Scarica Report CBCT CatPHAN PDF",
-                        data=report_pdf,
-                        file_name="QA_Report_CBCT_CatPHAN.pdf",
-                        mime="application/pdf"
-                    )
-                else:
-                    st.warning("Inserisci il nome utente per generare il report.")
-            except Exception as e:
-                st.error(f"Errore durante l'analisi CatPHAN: {e}")
-            finally:
-                if os.path.exists(temp_path):
-                    os.remove(temp_path)
 
 
 with tab6:
