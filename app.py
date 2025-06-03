@@ -484,46 +484,47 @@ with tab8:
     tolerance_percent = st.number_input("Tolleranza percentuale (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
 
     if wedge_img and st.button("Calcola Wedge Angle"):
-    try:
-        ds = pydicom.dcmread(wedge_img)
-        img = ds.pixel_array.astype(float)
-        center_row = img.shape[0] // 2
-        profile = img[center_row, :]
+        try:
+            ds = pydicom.dcmread(wedge_img)
+            img = ds.pixel_array.astype(float)
+            center_row = img.shape[0] // 2
+            profile = img[center_row, :]
 
-        # Pixel Spacing (dal DICOM o fallback)
-        tag = (0x3002, 0x0011)
-        if tag in ds:
-            pixel_spacing_mm = float(ds[tag].value[0])
-            pixel_spacing_cm = pixel_spacing_mm / 10
-        else:
-            pixel_spacing_cm = 0.025  # fallback, 0.25 mm → 0.025 cm
+            # Pixel Spacing (dal DICOM o fallback)
+            tag = (0x3002, 0x0011)
+            if tag in ds:
+                pixel_spacing_mm = float(ds[tag].value[0])
+                pixel_spacing_cm = pixel_spacing_mm / 10
+            else:
+                pixel_spacing_cm = 0.025  # fallback, 0.25 mm → 0.025 cm
 
-        # Calcolo D1, D2
-        center_pixel = len(profile) // 2
-        half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
-        left_idx = max(center_pixel - half_dist_pix, 0)
-        right_idx = min(center_pixel + half_dist_pix, len(profile) - 1)
+            # Calcolo D1, D2
+            center_pixel = len(profile) // 2
+            half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
+            left_idx = max(center_pixel - half_dist_pix, 0)
+            right_idx = min(center_pixel + half_dist_pix, len(profile) - 1)
 
-        D1 = profile[left_idx]
-        D2 = profile[right_idx]
+            D1 = profile[left_idx]
+            D2 = profile[right_idx]
 
-        if D1 <= 0 or D2 <= 0:
-            raise ValueError("Dose D1 e D2 devono essere positive.")
+            if D1 <= 0 or D2 <= 0:
+                raise ValueError("Dose D1 e D2 devono essere positive.")
 
-        ln_ratio = math.log(D1 / D2)
-        theta_rad = math.atan(ln_ratio / (u * wdistL))
-        theta_deg = math.degrees(theta_rad)
+            ln_ratio = math.log(D1 / D2)
+            theta_rad = math.atan(ln_ratio / (u * wdistL))
+            theta_deg = math.degrees(theta_rad)
 
-        diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
-        result_text = f"**Wedge Angle calcolato: {theta_deg:.2f}°**\n"
-        result_text += f"Nominale: {nominal_angle:.2f}°\n"
-        result_text += f"Differenza percentuale: {diff_percent:.2f}%\n"
+            diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
 
-        if diff_percent <= tolerance_percent:
-            result_text += "Risultato: ✅ entro tolleranza"
-        else:
-            result_text += "Risultato: ❌ fuori tolleranza"
+            result_text = f"**Wedge Angle calcolato: {theta_deg:.2f}°**\n"
+            result_text += f"Differenza percentuale rispetto all'angolo nominale: {diff_percent:.2f}%\n"
 
-        st.markdown(result_text)
-    except Exception as e:
-        st.error(f"Errore nel calcolo dell'angolo wedge: {e}")
+            if diff_percent <= tolerance_percent:
+                result_text += ":white_check_mark: Angolo nel range di tolleranza."
+            else:
+                result_text += ":x: Angolo fuori tolleranza!"
+
+            st.markdown(result_text)
+
+        except Exception as e:
+            st.error(f"Errore nel calcolo dell'angolo wedge: {e}")
