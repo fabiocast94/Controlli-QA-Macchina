@@ -472,55 +472,79 @@ with tab7:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
 with tab8:
-    import pydicom
-    from scipy.ndimage import gaussian_filter
-    from scipy.stats import linregress
-
     st.header("Wedge Angle")
 
-    wedge_img = st.file_uploader("Carica immagine DICOM con filtro wedge", type=["dcm"])
+    wedge_img = st.file_uploader("Carica immagine EPID con wedge (DICOM)", type=["dcm"])
 
-    if wedge_img and st.button("Esegui analisi Wedge Angle"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
-            f.write(wedge_img.getbuffer())
-            temp_path = f.name
+    wdistL = st.number_input("Distanza campo (cm, es. 5 per 10x10)", min_value=1.0, max_value=20.0, value=5.0, step=0.1)
+    u = st.number_input("Valore u (costante da misure tank)", min_value=0.001, max_value=1.0, value=0.036, step=0.001)
+    nominal_angle = st.number_input("Angolo nominale wedge (°)", min_value=0.0, max_value=90.0, value=60.0, step=0.1)
+    tolerance_percent = st.number_input("Tolleranza percentuale (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
 
+    if wedge_img and st.button("Calcola Wedge Angle"):
         try:
-            dcm = pydicom.dcmread(temp_path)
-            pixel_array = dcm.pixel_array.astype(float)
-            pixel_array = gaussian_filter(pixel_array, sigma=2)  # leggera smoothatura
+            ds = pydicom.dcmread(wedge_img)
+            img = ds.pixel_array.astype(float)
+            center_row = img.shape[0] // 2
+            profile = img[center_row, :]
 
-            # Estrai profilo centrale (orizzontale o verticale)
-            central_profile = pixel_array[pixel_array.shape[0] // 2, :]
-            x = np.arange(len(central_profile))
-            y = central_profile
+            # Pixel Spacing (dal DICOM o fallback)
+            tag = (0x3002, 0x0011)
+            if tag in ds:
+                pixel_spacing_mm = float(ds[tag].value[0])
+                pixel_spacing_cm = pixel_spacing_mm / 10
+            else:
+                pixel_spacing_cm = 0.025  # fallback, 0.25 mm → 0.025 cm
 
-            # Linear regression sul profilo
-            slope, intercept, r_value, p_value, std_err = linregress(x, y)
-            angle_rad = np.arctan(slope)
-            angle_deg = np.degrees(angle_rad)
+            # Calcolo D1, D2
+            center_pixel = len(profile) // 2
+            half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
+            left_idx = max(center_pixel - half_dist_pix, 0)
+            right_idx = min(center_pixel + half_dist_pix, len(profile) - 1)
 
-            risultati = f"""
-            Risultati Wedge Angle:
-            ----------------------
-            Inclinazione (slope): {slope:.4f}
-            Angolo stimato: {angle_deg:.2f}°
-            Coefficiente R²: {r_value**2:.4f}
-            """
+            D1 = profile[left_idx]
+            D2 = profile[right_idx]
 
-            st.text(risultati)
+            if D1 <= 0 or D2 <= 0:
+                raise ValueError("Dose D1 e D2 devono essere positive.")
 
-            # Plot profilo e retta regressione
-            plt.plot(x, y, label="Profilo dose")
-            plt.plot(x, slope * x + intercept, label=f"Regr. Lineare\nAngolo: {angle_deg:.2f}°", linestyle="--")
-            plt.xlabel("Posizione pixel")
-            plt.ylabel("Intensità")
-            plt.title("Wedge Profile & Regressione")
-            plt.legend()
-            st.pyplot(plt.gcf())
-            plt.clf()
+            ln_ratio = math.log(D1 / D2)
+            theta_rad = math.atan(ln_ratio / (u * wdistL))
+            theta_deg = math.degrees(theta_rad)
 
+            diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
+            result_text = f"**Wedge Angle calcolato: {theta_deg:.2f}°**\n"
+            result_text += f"Angolo nominale: {nominal_angle:.2f}°\n"
+            result_text += f"Differenza percentuale: {diff_percent:.2f}%\n"
+
+            if diff_percent <= tolerance_percent:
+                result_text += f":green[**RISULTATO: PASS**] (entro ±{tolerance_percent:.1f}%)"
+            else:
+                result_text += f":red[**RISULTATO: FAIL**] (fuori ±{tolerance_percent:.1f}%)"
+
+            st.markdown(result_text)
+
+            # Plot
+            fig, ax = plt.subplots(figsize=(10, 4))
+            ax.plot(profile, label="Profilo dose")
+            ax.axvline(x=center_pixel, color='gray', linestyle='--', label='Centro')
+            ax.scatter([left_idx, right_idx], [D1, D2], color='red', label='D1 & D2')
+            ax.set_xlabel("Pixel")
+            ax.set_ylabel("Dose (counts)")
+            ax.set_title("Profilo EPID con wedge")
+            ax.legend()
+            ax.grid(True)
+            st.pyplot(fig)
+
+            # PDF report
             if utente.strip():
+                risultati = f"""Wedge Angle calcolato: {theta_deg:.2f}°
+Angolo nominale: {nominal_angle:.2f}°
+D1: {D1:.2f}, D2: {D2:.2f}
+Differenza: {diff_percent:.2f}%
+Tolleranza: ±{tolerance_percent:.1f}%
+Risultato: {"PASS" if diff_percent <= tolerance_percent else "FAIL"}"""
+
                 report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati, None, utente, linac, energia)
                 st.download_button(
                     "📥 Scarica Report Wedge Angle PDF",
@@ -530,6 +554,6 @@ with tab8:
                 )
             else:
                 st.warning("Inserisci il nome utente per generare il report.")
-
+        
         except Exception as e:
-            st.error(f"Errore durante l'analisi Wedge Angle: {e}")
+            st.error(f"Errore durante l'elaborazione: {e}")
