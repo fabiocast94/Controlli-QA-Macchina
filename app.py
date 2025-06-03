@@ -490,15 +490,13 @@ with tab8:
             center_row = img.shape[0] // 2
             profile = img[center_row, :]
 
-            # Pixel Spacing (dal DICOM o fallback)
             tag = (0x3002, 0x0011)
             if tag in ds:
                 pixel_spacing_mm = float(ds[tag].value[0])
                 pixel_spacing_cm = pixel_spacing_mm / 10
             else:
-                pixel_spacing_cm = 0.025  # fallback, 0.25 mm → 0.025 cm
+                pixel_spacing_cm = 0.025  # fallback
 
-            # Calcolo D1, D2
             center_pixel = len(profile) // 2
             half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
             left_idx = max(center_pixel - half_dist_pix, 0)
@@ -516,15 +514,59 @@ with tab8:
 
             diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
 
-            result_text = f"**Wedge Angle calcolato: {theta_deg:.2f}°**\n"
-            result_text += f"Differenza percentuale rispetto all'angolo nominale: {diff_percent:.2f}%\n"
+            # Output dei risultati
+            st.write(f"Angolo wedge calcolato: **{theta_deg:.2f}°**")
+            st.write(f"Differenza percentuale dall'angolo nominale: **{diff_percent:.2f}%**")
 
-            if diff_percent <= tolerance_percent:
-                result_text += ":white_check_mark: Angolo nel range di tolleranza."
+            # Plot del profilo di dose e linee verticali per D1 e D2
+            fig, ax = plt.subplots()
+            x_axis_cm = np.arange(len(profile)) * pixel_spacing_cm
+            ax.plot(x_axis_cm, profile, label="Profilo di dose")
+            ax.axvline(x=x_axis_cm[left_idx], color='r', linestyle='--', label='D1 position')
+            ax.axvline(x=x_axis_cm[right_idx], color='g', linestyle='--', label='D2 position')
+            ax.set_xlabel("Posizione (cm)")
+            ax.set_ylabel("Dose (arb. unit)")
+            ax.set_title("Profilo dose centrale con posizioni D1 e D2")
+            ax.legend()
+            st.pyplot(fig)
+            plt.clf()
+
+            # Funzione per creare PDF specifico wedge angle
+            def crea_report_pdf_wedge(titolo, theta_deg, diff_percent, utente, linac, energia):
+                buffer = BytesIO()
+                c = canvas.Canvas(buffer, pagesize=A4)
+                width, height = A4
+
+                inserisci_logo_pdf(c, logo_file_path, width, height)
+
+                y_start = height - 180
+                c.setFont("Helvetica-Bold", 14)
+                c.drawString(50, y_start, f"Controlli Qualità LINAC - {titolo}")
+                c.setFont("Helvetica", 12)
+                c.drawString(50, y_start - 20, f"Utente: {utente}")
+                c.drawString(50, y_start - 40, f"Linac: {linac}")
+                c.drawString(50, y_start - 60, f"Energia: {energia}")
+                c.drawString(50, y_start - 80, f"Data: {datetime.date.today()}")
+
+                c.setFont("Helvetica-Bold", 12)
+                c.drawString(50, y_start - 110, "Risultati Analisi Wedge Angle:")
+                c.setFont("Helvetica", 12)
+                c.drawString(60, y_start - 140, f"Angolo wedge calcolato: {theta_deg:.2f}°")
+                c.drawString(60, y_start - 160, f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%")
+                c.save()
+                buffer.seek(0)
+                return buffer
+
+            if utente.strip():
+                report_pdf = crea_report_pdf_wedge("Wedge Angle", theta_deg, diff_percent, utente, linac, energia)
+                st.download_button(
+                    "📥 Scarica Report Wedge Angle PDF",
+                    data=report_pdf,
+                    file_name="QA_Report_WedgeAngle.pdf",
+                    mime="application/pdf"
+                )
             else:
-                result_text += ":x: Angolo fuori tolleranza!"
-
-            st.markdown(result_text)
+                st.warning("Inserisci il nome utente per generare il report.")
 
         except Exception as e:
-            st.error(f"Errore nel calcolo dell'angolo wedge: {e}")
+            st.error(f"Errore durante il calcolo Wedge Angle: {e}")
