@@ -122,15 +122,17 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
 
 
 
-tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Dose Rate Gantry Speed",
     "Dose Rate Leaf Speed",
     "Picket Fence",
     "Star Shot",
     "CBCT CatPhan",
     "Wiston Lutz",
-    "Field Analysis"
+    "Field Analysis",
+    "Wedge Angle"
 ])
+
 
 with tab1:
     st.header("Dose Rate Gantry Speed (DRGS)")
@@ -469,3 +471,55 @@ with tab7:
         finally:
             if os.path.exists(temp_path):
                 os.remove(temp_path)
+
+with tab8:
+    import pydicom
+    from scipy.ndimage import gaussian_filter
+    from scipy.stats import linregress
+
+    st.header("Wedge Angle")
+
+    wedge_img = st.file_uploader("Carica immagine DICOM con filtro wedge", type=["dcm"])
+
+    if wedge_img and st.button("Esegui analisi Wedge Angle"):
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+            f.write(wedge_img.getbuffer())
+            temp_path = f.name
+
+        try:
+            dcm = pydicom.dcmread(temp_path)
+            pixel_array = dcm.pixel_array.astype(float)
+            pixel_array = gaussian_filter(pixel_array, sigma=2)  # leggera smoothatura
+
+            # Estrai profilo centrale (orizzontale o verticale)
+            central_profile = pixel_array[pixel_array.shape[0] // 2, :]
+            x = np.arange(len(central_profile))
+            y = central_profile
+
+            # Linear regression sul profilo
+            slope, intercept, r_value, p_value, std_err = linregress(x, y)
+            angle_rad = np.arctan(slope)
+            angle_deg = np.degrees(angle_rad)
+
+            risultati = f"""
+            Risultati Wedge Angle:
+            ----------------------
+            Inclinazione (slope): {slope:.4f}
+            Angolo stimato: {angle_deg:.2f}°
+            Coefficiente R²: {r_value**2:.4f}
+            """
+
+            st.text(risultati)
+
+            # Plot profilo e retta regressione
+            plt.plot(x, y, label="Profilo dose")
+            plt.plot(x, slope * x + intercept, label=f"Regr. Lineare\nAngolo: {angle_deg:.2f}°", linestyle="--")
+            plt.xlabel("Posizione pixel")
+            plt.ylabel("Intensità")
+            plt.title("Wedge Profile & Regressione")
+            plt.legend()
+            st.pyplot(plt.gcf())
+            plt.clf()
+
+            if utente.strip():
+                report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati, None, uten_
