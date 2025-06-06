@@ -479,75 +479,87 @@ with tab8:
     wedge_img = st.file_uploader("Carica immagine EPID con wedge (DICOM)", type=["dcm"])
 
     wdistL = st.number_input("Distanza campo (cm, es. 5 per 10x10)", min_value=1.0, max_value=20.0, value=5.0, step=0.1)
-    u = st.number_input("Valore u (costante da misure tank)", min_value=0.001, max_value=1.0, value=0.036, step=0.001)
+    u = st.number_input("Valore u (costante da misure water tank)", min_value=0.001, max_value=1.0, value=0.036, step=0.001)
     nominal_angle = st.number_input("Angolo nominale wedge (°)", min_value=0.0, max_value=90.0, value=60.0, step=0.1)
-    tolerance_percent = st.number_input("Tolleranza percentuale (%)", min_value=0.1, max_value=10.0, value=1.0, step=0.1)
+    tolerance_percent = st.number_input("Tolleranza percentuale (%)", min_value=0.1, max_value=10.0, value=2.0, step=0.1)
+
+    def get_profile(ds):
+        img = ds.pixel_array.astype(float)
+        center_col = img.shape[1] // 2   # colonna centrale per asse y
+        profile = img[:, center_col]     # profilo lungo asse y
+        return profile
+
+    def find_dose_at_distance(profile, pixel_spacing_cm, wdistL):
+        center_pixel = len(profile) // 2
+        half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
+
+        left_index = max(center_pixel - half_dist_pix, 0)
+        right_index = min(center_pixel + half_dist_pix, len(profile) - 1)
+
+        D1 = profile[left_index]
+        D2 = profile[right_index]
+        return D1, D2, left_index, right_index
+
+    def calculate_theta(D1, D2, u, wdistL):
+        if D1 <= 0 or D2 <= 0:
+            raise ValueError("Dose D1 e D2 devono essere positivi")
+
+        ln_ratio = math.log(D1 / D2)
+        theta_rad = math.atan(ln_ratio / (u * wdistL))
+        theta_deg = math.degrees(theta_rad)
+        return abs(theta_deg)  # valore assoluto
+
+    def plot_profile(profile, left_idx, right_idx):
+        fig, ax = plt.subplots(figsize=(10,5))
+        ax.plot(profile, label='Profilo dose')
+        ax.scatter([left_idx, right_idx], [profile[left_idx], profile[right_idx]], color='red', label='D1 e D2')
+        ax.axvline(x=len(profile)//2, color='gray', linestyle='--', label='Centro')
+        ax.set_title('Profilo dose EPID (asse Y)')
+        ax.set_xlabel('Pixel')
+        ax.set_ylabel('Dose (counts)')
+        ax.legend()
+        ax.grid(True)
+        st.pyplot(fig)
+        plt.close(fig)
 
     if wedge_img and st.button("Calcola Wedge Angle"):
         try:
             ds = pydicom.dcmread(wedge_img)
-            img = ds.pixel_array.astype(float)
-            center_col = img.shape[1] // 2
-            profile = img[:, center_col]  # profilo lungo asse y (come nel tuo script)
-
             tag = (0x3002, 0x0011)
+
             if tag in ds:
-                pixel_spacing_mm = float(ds[tag].value[0])
-                pixel_spacing_cm = pixel_spacing_mm / 10
+                pixel_spacing_mm = [float(x) for x in ds[tag].value]
+                pixel_spacing_cm = pixel_spacing_mm[0] / 10
             else:
                 pixel_spacing_cm = 0.025  # fallback
 
-            center_pixel = len(profile) // 2
-            half_dist_pix = int((wdistL / 2) / pixel_spacing_cm)
-            left_idx = max(center_pixel - half_dist_pix, 0)
-            right_idx = min(center_pixel + half_dist_pix, len(profile) - 1)
+            profile = get_profile(ds)
+            D1, D2, left_idx, right_idx = find_dose_at_distance(profile, pixel_spacing_cm, wdistL)
 
-            D1 = profile[left_idx]
-            D2 = profile[right_idx]
+            theta = calculate_theta(D1, D2, u, wdistL)
+            diff_percent = abs(theta - nominal_angle) / nominal_angle * 100
 
-            if D1 <= 0 or D2 <= 0:
-                raise ValueError("Dose D1 e D2 devono essere positive.")
-
-            ln_ratio = math.log(D1 / D2)
-            theta_rad = math.atan(ln_ratio / (u * wdistL))
-            theta_deg = abs(math.degrees(theta_rad))
-
-            diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
-
-            # Output risultati
-            st.write(f"Angolo wedge calcolato: **{theta_deg:.2f}°**")
+            st.write(f"D1 (dose a -{wdistL/2} cm dal centro): **{D1:.2f}**")
+            st.write(f"D2 (dose a +{wdistL/2} cm dal centro): **{D2:.2f}**")
+            st.write(f"Angolo θ calcolato (valore assoluto): **{theta:.2f}°**")
             st.write(f"Differenza percentuale dall'angolo nominale: **{diff_percent:.2f}%**")
 
-            # Plot profilo dose e posizioni D1 e D2
-            fig, ax = plt.subplots()
-            x_axis_cm = np.arange(len(profile)) * pixel_spacing_cm
-            ax.plot(x_axis_cm, profile, label="Profilo di dose")
-            ax.axvline(x=x_axis_cm[left_idx], color='r', linestyle='--', label='D1')
-            ax.axvline(x=x_axis_cm[right_idx], color='g', linestyle='--', label='D2')
-            ax.set_xlabel("Posizione (cm)")
-            ax.set_ylabel("Dose (arb. unit)")
-            ax.set_title("Profilo dose centrale con posizioni D1 e D2")
-            ax.legend()
-            st.pyplot(fig)
-            plt.clf()
+            if diff_percent <= tolerance_percent:
+                st.success(f"RISULTATO: PASS (differenza entro ±{tolerance_percent}%)")
+            else:
+                st.error(f"RISULTATO: FAIL (differenza fuori tolleranza ±{tolerance_percent}%)")
 
-            # Generazione report PDF usando funzione esistente
+            plot_profile(profile, left_idx, right_idx)
+
+            # Generazione report PDF
             if utente.strip():
                 risultati_wedge = (
-                    f"Angolo wedge calcolato: {theta_deg:.2f}°\n"
+                    f"D1 (dose a -{wdistL/2} cm dal centro): {D1:.2f}\n"
+                    f"D2 (dose a +{wdistL/2} cm dal centro): {D2:.2f}\n"
+                    f"Angolo wedge calcolato: {theta:.2f}°\n"
                     f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%\n"
+                    f"Risultato: {'PASS' if diff_percent <= tolerance_percent else 'FAIL'}"
                 )
-                report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati_wedge, None, utente, linac, energia)
-                st.download_button(
-                    "📥 Scarica Report Wedge Angle PDF",
-                    data=report_pdf,
-                    file_name="QA_Report_WedgeAngle.pdf",
-                    mime="application/pdf"
-                )
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
 
-        except Exception as e:
-            st.error(f"Errore durante il calcolo Wedge Angle: {e}")
 
 
