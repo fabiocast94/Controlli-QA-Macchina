@@ -487,8 +487,8 @@ with tab8:
         try:
             ds = pydicom.dcmread(wedge_img)
             img = ds.pixel_array.astype(float)
-            center_row = img.shape[1] // 2
-            profile = img[center_row, :]
+            center_col = img.shape[1] // 2
+            profile = img[:, center_col]  # profilo lungo asse y (come nel tuo script)
 
             tag = (0x3002, 0x0011)
             if tag in ds:
@@ -510,20 +510,20 @@ with tab8:
 
             ln_ratio = math.log(D1 / D2)
             theta_rad = math.atan(ln_ratio / (u * wdistL))
-            theta_deg = math.degrees(theta_rad)
+            theta_deg = abs(math.degrees(theta_rad))
 
             diff_percent = abs(theta_deg - nominal_angle) / nominal_angle * 100
 
-            # Output dei risultati
+            # Output risultati
             st.write(f"Angolo wedge calcolato: **{theta_deg:.2f}°**")
             st.write(f"Differenza percentuale dall'angolo nominale: **{diff_percent:.2f}%**")
 
-            # Plot del profilo di dose e linee verticali per D1 e D2
+            # Plot profilo dose e posizioni D1 e D2
             fig, ax = plt.subplots()
             x_axis_cm = np.arange(len(profile)) * pixel_spacing_cm
             ax.plot(x_axis_cm, profile, label="Profilo di dose")
-            ax.axvline(x=x_axis_cm[left_idx], color='r', linestyle='--', label='D1 position')
-            ax.axvline(x=x_axis_cm[right_idx], color='g', linestyle='--', label='D2 position')
+            ax.axvline(x=x_axis_cm[left_idx], color='r', linestyle='--', label='D1')
+            ax.axvline(x=x_axis_cm[right_idx], color='g', linestyle='--', label='D2')
             ax.set_xlabel("Posizione (cm)")
             ax.set_ylabel("Dose (arb. unit)")
             ax.set_title("Profilo dose centrale con posizioni D1 e D2")
@@ -531,34 +531,13 @@ with tab8:
             st.pyplot(fig)
             plt.clf()
 
-            # Funzione per creare PDF specifico wedge angle
-            def crea_report_pdf_wedge(titolo, theta_deg, diff_percent, utente, linac, energia):
-                buffer = BytesIO()
-                c = canvas.Canvas(buffer, pagesize=A4)
-                width, height = A4
-
-                inserisci_logo_pdf(c, logo_file_path, width, height)
-
-                y_start = height - 180
-                c.setFont("Helvetica-Bold", 14)
-                c.drawString(50, y_start, f"Controlli Qualità LINAC - {titolo}")
-                c.setFont("Helvetica", 12)
-                c.drawString(50, y_start - 20, f"Utente: {utente}")
-                c.drawString(50, y_start - 40, f"Linac: {linac}")
-                c.drawString(50, y_start - 60, f"Energia: {energia}")
-                c.drawString(50, y_start - 80, f"Data: {datetime.date.today()}")
-
-                c.setFont("Helvetica-Bold", 12)
-                c.drawString(50, y_start - 110, "Risultati Analisi Wedge Angle:")
-                c.setFont("Helvetica", 12)
-                c.drawString(60, y_start - 140, f"Angolo wedge calcolato: {theta_deg:.2f}°")
-                c.drawString(60, y_start - 160, f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%")
-                c.save()
-                buffer.seek(0)
-                return buffer
-
+            # Generazione report PDF usando funzione esistente
             if utente.strip():
-                report_pdf = crea_report_pdf_wedge("Wedge Angle", theta_deg, diff_percent, utente, linac, energia)
+                risultati_wedge = (
+                    f"Angolo wedge calcolato: {theta_deg:.2f}°\n"
+                    f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%\n"
+                )
+                report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati_wedge, None, utente, linac, energia)
                 st.download_button(
                     "📥 Scarica Report Wedge Angle PDF",
                     data=report_pdf,
@@ -570,3 +549,5 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
+
