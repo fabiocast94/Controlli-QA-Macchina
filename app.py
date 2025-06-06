@@ -523,54 +523,55 @@ with tab8:
         plt.close(fig)
 
     if wedge_img and st.button("Calcola Wedge Angle"):
-    try:
-        ds = pydicom.dcmread(wedge_img)
-        tag = (0x3002, 0x0011)
+        try:
+            ds = pydicom.dcmread(wedge_img)
+            tag = (0x3002, 0x0011)
 
-        if tag in ds:
-            pixel_spacing_mm = [float(x) for x in ds[tag].value]
-            pixel_spacing_cm = pixel_spacing_mm[0] / 10
-        else:
-            pixel_spacing_cm = 0.025  # fallback
+            if tag in ds:
+                pixel_spacing_mm = [float(x) for x in ds[tag].value]
+                pixel_spacing_cm = pixel_spacing_mm[0] / 10
+            else:
+                pixel_spacing_cm = 0.025  # fallback
 
-        profile = get_profile(ds)
-        D1, D2, left_idx, right_idx = find_dose_at_distance(profile, pixel_spacing_cm, wdistL)
+            profile = get_profile(ds)
+            D1, D2, left_idx, right_idx = find_dose_at_distance(profile, pixel_spacing_cm, wdistL)
 
-        theta = calculate_theta(D1, D2, u, wdistL)
-        diff_percent = abs(theta - nominal_angle) / nominal_angle * 100
+            theta = calculate_theta(D1, D2, u, wdistL)
+            diff_percent = abs(theta - nominal_angle) / nominal_angle * 100
 
-        st.write(f"D1 (dose a -{wdistL/2} cm dal centro): **{D1:.2f}**")
-        st.write(f"D2 (dose a +{wdistL/2} cm dal centro): **{D2:.2f}**")
-        st.write(f"Angolo θ calcolato (valore assoluto): **{theta:.2f}°**")
-        st.write(f"Differenza percentuale dall'angolo nominale: **{diff_percent:.2f}%**")
+            st.write(f"D1 (dose a -{wdistL/2} cm dal centro): **{D1:.2f}**")
+            st.write(f"D2 (dose a +{wdistL/2} cm dal centro): **{D2:.2f}**")
+            st.write(f"Angolo θ calcolato (valore assoluto): **{theta:.2f}°**")
+            st.write(f"Differenza percentuale dall'angolo nominale: **{diff_percent:.2f}%**")
 
-        if diff_percent <= tolerance_percent:
-            st.success(f"RISULTATO: PASS (differenza entro ±{tolerance_percent}%)")
-        else:
-            st.error(f"RISULTATO: FAIL (differenza fuori tolleranza ±{tolerance_percent}%)")
+            if diff_percent <= tolerance_percent:
+                st.success(f"RISULTATO: PASS (differenza entro ±{tolerance_percent}%)")
+            else:
+                st.error(f"RISULTATO: FAIL (differenza fuori tolleranza ±{tolerance_percent}%)")
 
-        plot_profile(profile, left_idx, right_idx)
+            plot_profile(profile, left_idx, right_idx)
 
-        # Generazione report PDF
-        if utente.strip():
-            risultati_wedge = (
-                f"D1 (dose a -{wdistL/2} cm dal centro): {D1:.2f}\n"
-                f"D2 (dose a +{wdistL/2} cm dal centro): {D2:.2f}\n"
-                f"Angolo wedge calcolato: {theta:.2f}°\n"
-                f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%\n"
-                f"Risultato: {'PASS' if diff_percent <= tolerance_percent else 'FAIL'}"
-            )
-            report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati_wedge, None, utente, linac, energia)
-            st.download_button(
-                "📥 Scarica Report Wedge Angle PDF",
-                data=report_pdf,
-                file_name="QA_Report_WedgeAngle.pdf",
-                mime="application/pdf"
-            )
-        else:
-            st.warning("Inserisci il nome utente per generare il report.")
+            # Generazione report PDF
+            if utente.strip():
+                risultati_wedge = (
+                    f"D1 (dose a -{wdistL/2} cm dal centro): {D1:.2f}\n"
+                    f"D2 (dose a +{wdistL/2} cm dal centro): {D2:.2f}\n"
+                    f"Angolo wedge calcolato: {theta:.2f}°\n"
+                    f"Differenza percentuale dall'angolo nominale: {diff_percent:.2f}%\n"
+                    f"Risultato: {'PASS' if diff_percent <= tolerance_percent else 'FAIL'}"
+                )
+                report_pdf = crea_report_pdf_senza_immagini("Wedge Angle", risultati_wedge, None, utente, linac, energia)
+                st.download_button(
+                    "📥 Scarica Report Wedge Angle PDF",
+                    data=report_pdf,
+                    file_name="QA_Report_WedgeAngle.pdf",
+                    mime="application/pdf"
+                )
+            else:
+                st.warning("Inserisci il nome utente per generare il report.")
 
-    except Exception as e:
-        st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+        except Exception as e:
+            st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
