@@ -487,7 +487,7 @@ with tab8:
         try:
             ds = pydicom.dcmread(wedge_img)
             img = ds.pixel_array.astype(float)
-            center_row = img.shape[0] // 2
+            center_row = img.shape[1] // 2
             profile = img[center_row, :]
 
             tag = (0x3002, 0x0011)
