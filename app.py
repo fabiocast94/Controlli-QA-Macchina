@@ -443,7 +443,7 @@ with tab6:
                 else:
                     # Esegui analisi WinstonLutz con la lista di file DICOM
                     wl = WinstonLutz(dicom_files)
-                    wl.analyze()
+                    wl.analyze(bb_size_mm=7)
                     risultati = wl.results()
 
                     st.text(risultati)
