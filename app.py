@@ -139,54 +139,51 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
 with tab1:
     st.header("Dose Rate Gantry Speed (DRGS)")
 
+    # Upload DICOM
     open_img = st.file_uploader("Carica immagine Open.dcm", type=["dcm"], key="drgs_open")
     dmlc_img = st.file_uploader("Carica immagine Field.dcm", type=["dcm"], key="drgs_field")
 
+    # Tolleranza semplice
     tolerance = st.number_input("Tolleranza (%)", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
-    roi_width = st.number_input("Larghezza ROI (mm)", min_value=5, max_value=50, value=10, step=1)
-    roi_height = st.number_input("Altezza ROI (mm)", min_value=50, max_value=300, value=150, step=5)
-
-    shift_roi = st.number_input("Shift globale ROI (mm)", min_value=-100, max_value=100, value=0, step=1)
-
-    # Definisci posizione base delle ROI, ad esempio posizioni relative (in mm)
-    base_offsets = [-50, -38, -25, -10, 3, 17, 30]  # Oppure un metodo per calcolare la posizione base rispetto all’immagine
-    # O puoi definire in modo più dinamico tipo equidistanti intorno allo zero
-    # Ad esempio:
-    n_roi = 7
-    spacing = 15
-    base_offsets = [spacing * (i - n_roi // 2) for i in range(n_roi)]
-
-    # Calcola l'offset totale sommando shift globale
-    custom_roi_config = {f"ROI {i+1}": {"offset_mm": base_offsets[i] + shift_roi} for i in range(n_roi)}
 
     if open_img and dmlc_img and st.button("Esegui analisi DRGS"):
         with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_open, \
              tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f_field:
             f_open.write(open_img.getbuffer())
             f_field.write(dmlc_img.getbuffer())
+            open_path = f_open.name
+            field_path = f_field.name
 
-        drgs = DRGS(image_paths=(f_open.name, f_field.name))
-        drgs.default_roi_config = custom_roi_config
+        try:
+            # Analisi semplice
+            mydrgs = DRGS(image_paths=(open_path, field_path))
+            mydrgs.analyze(tolerance=tolerance)
 
-        segment_size_mm = (roi_width, roi_height)
-        drgs.analyze(tolerance=tolerance, segment_size_mm=segment_size_mm)
+            risultati = mydrgs.results()
+            st.text(risultati)
 
-        risultati = drgs.results()
-        st.text(risultati)
-        drgs.plot_analyzed_image()
-        st.pyplot(plt.gcf())
-        plt.clf()
+            # Mostra immagine
+            mydrgs.plot_analyzed_image()
+            st.pyplot(plt.gcf())
+            plt.close()
 
-        if utente:
-            report_pdf = crea_report_pdf_senza_immagini("Dose Rate Gantry Speed", risultati, drgs, utente, linac, energia)
-            st.download_button(
-                "📥 Scarica Report DRGS PDF",
-                data=report_pdf,
-                file_name="QA_Report_DRGS.pdf",
-                mime="application/pdf"
-            )
-        else:
-            st.warning("Inserisci il nome utente per generare il report.")
+            # Genera report PDF interno Streamlit
+            if utente:
+                pdf_path = os.path.join(tempfile.gettempdir(), "drgs_report.pdf")
+                mydrgs.publish_pdf(pdf_path)
+
+                with open(pdf_path, "rb") as f:
+                    st.download_button(
+                        label="📥 Scarica Report DRGS PDF",
+                        data=f.read(),
+                        file_name="QA_Report_DRGS.pdf",
+                        mime="application/pdf"
+                    )
+            else:
+                st.warning("Inserisci il nome utente per generare il report.")
+        except Exception as e:
+            st.error(f"Errore durante l'analisi DRGS: {str(e)}")
+
 
 
 
