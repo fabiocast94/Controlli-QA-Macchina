@@ -18,7 +18,6 @@ import tempfile
 import pydicom
 import math
 
-
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 # CONFIGURAZIONE PAGINA
@@ -48,31 +47,17 @@ mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
 
 # DATI GENERALI
 utente = st.text_input("Nome Utente")
-linac = st.selectbox("Seleziona Linac", ["Linac1", "Edge", "Linac3", "Linac4", "STx"])
+linac = st.selectbox("Seleziona Linac", ["Linac 4791", "Edge", "Linac 6322", "Linac 1015", "STx", "Trilogy", "TueBeam PIO"])
 energia = st.selectbox("Seleziona Energia", ["6 MV", "10 MV", "15 MV", "6 FFF", "10 FFF"])
 
 # FUNZIONE PDF
-def inserisci_logo_pdf(c, logo_path, page_width, page_height):
-    logo = Image.open(logo_path)
-    max_width = page_width * 0.6
-    wpercent = max_width / float(logo.size[0])
-    hsize = int((float(logo.size[1]) * float(wpercent)))
-    logo = logo.resize((int(max_width), hsize), Image.Resampling.LANCZOS)
-
-    img_io = BytesIO()
-    logo.save(img_io, format="PNG")
-    img_io.seek(0)
-    x = (page_width - max_width) / 2
-    y = page_height - hsize - 50
-    c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
-
 def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac, energia):
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.utils import ImageReader
     from PIL import Image
-    import datetime
     from io import BytesIO
+    import datetime
 
     buffer = BytesIO()
     c = canvas.Canvas(buffer, pagesize=A4)
@@ -91,8 +76,7 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
         x = (width - max_width) / 2
         y = height - hsize - 50
         c.drawImage(ImageReader(img_io), x, y, width=max_width, height=hsize, mask='auto')
-    except Exception as e:
-        # Se fallisce il logo, non bloccare tutto
+    except Exception:
         pass
 
     y_start = height - 180
@@ -117,13 +101,45 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
         text_obj.textLine(line)
     c.drawText(text_obj)
 
+    # Stampiamo i dati delle ROI, se disponibili
+    results_data = pylinac_obj.results_data()
+    named_segments = getattr(results_data, "named_segment_data", None)
+
+    if named_segments:
+        c.setFont("Helvetica-Bold", 12)
+        y = y_start - 250
+        c.drawString(50, y, "Risultati per ciascuna ROI:")
+        y -= 20
+        c.setFont("Courier", 10)
+
+        for roi_name, segment_obj in named_segments.items():
+            passed = getattr(segment_obj, "passed", "N/A")
+            x_pos = getattr(segment_obj, "x_position_mm", "N/A")
+            r_dev = getattr(segment_obj, "r_dev", "N/A")
+
+            if y < 100:
+                c.showPage()
+                y = height - 50
+                c.setFont("Courier", 10)
+
+            c.drawString(50, y, f"{roi_name}:")
+            y -= 15
+            c.drawString(60, y, f"Passed: {passed}")
+            y -= 15
+            c.drawString(60, y, f"Posizione X (mm): {x_pos}")
+            y -= 15
+            try:
+                r_dev_str = f"{float(r_dev):.3f}%"
+            except Exception:
+                r_dev_str = "N/A"
+            c.drawString(60, y, f"Deviazione R (%): {r_dev_str}")
+            y -= 25
+
     c.save()
     buffer.seek(0)
     return buffer
 
-
-
-
+# TABS
 tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Dose Rate Gantry Speed",
     "Dose Rate Leaf Speed",
@@ -135,15 +151,12 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7, tab8 = st.tabs([
     "Wedge Angle"
 ])
 
-
 with tab1:
     st.header("Dose Rate Gantry Speed (DRGS)")
 
-    # Upload DICOM
     open_img = st.file_uploader("Carica immagine Open.dcm", type=["dcm"], key="drgs_open")
     dmlc_img = st.file_uploader("Carica immagine Field.dcm", type=["dcm"], key="drgs_field")
 
-    # Tolleranza semplice
     tolerance = st.number_input("Tolleranza (%)", min_value=0.1, max_value=5.0, value=1.5, step=0.1)
 
     if open_img and dmlc_img and st.button("Esegui analisi DRGS"):
@@ -155,36 +168,50 @@ with tab1:
             field_path = f_field.name
 
         try:
-            # Analisi semplice
             mydrgs = DRGS(image_paths=(open_path, field_path))
             mydrgs.analyze(tolerance=tolerance)
 
             risultati = mydrgs.results()
             st.text(risultati)
 
-            # Mostra immagine
+            results_data = mydrgs.results_data()
+            named_segments = results_data.named_segment_data if hasattr(results_data, "named_segment_data") else {}
+
+            if named_segments:
+                st.markdown("### Risultati per ROI:")
+                for roi_name, segment_obj in named_segments.items():
+                    passed = getattr(segment_obj, "passed", None)
+                    x_pos = getattr(segment_obj, "x_position_mm", None)
+                    r_dev = getattr(segment_obj, "r_dev", None)
+
+                    st.markdown(f"**{roi_name}**")
+                    st.write(f"- Passed: {passed}")
+                    st.write(f"- Posizione X [mm]: {x_pos}")
+                    if r_dev is not None:
+                        st.write(f"- Deviazione R [%]: {float(r_dev):.3f}%")
+                    else:
+                        st.write("- Deviazione R: N/A")
+                    st.write("---")
+            else:
+                st.warning("Nessun dato ROI disponibile in results_data().")
+
             mydrgs.plot_analyzed_image()
             st.pyplot(plt.gcf())
             plt.close()
 
-            # Genera report PDF interno Streamlit
-            if utente:
-                pdf_path = os.path.join(tempfile.gettempdir(), "drgs_report.pdf")
-                mydrgs.publish_pdf(pdf_path)
-
-                with open(pdf_path, "rb") as f:
-                    st.download_button(
-                        label="📥 Scarica Report DRGS PDF",
-                        data=f.read(),
-                        file_name="QA_Report_DRGS.pdf",
-                        mime="application/pdf"
-                    )
+            if utente.strip():
+                pdf_buffer = crea_report_pdf_senza_immagini("Dose Rate Gantry Speed", risultati, mydrgs, utente, linac, energia)
+                st.download_button(
+                    label="📥 Scarica Report DRGS PDF",
+                    data=pdf_buffer,
+                    file_name="QA_Report_DRGS.pdf",
+                    mime="application/pdf"
+                )
             else:
-                st.warning("Inserisci il nome utente per generare il report.")
+                st.info("Inserisci il nome utente per abilitare il download del report PDF.")
+
         except Exception as e:
-            st.error(f"Errore durante l'analisi DRGS: {str(e)}")
-
-
+            st.error(f"Errore durante l'analisi DRGS: {e}")
 
 
 
@@ -202,15 +229,40 @@ with tab2:
             f_open.write(open_img.getbuffer())
             f_mlc.write(mlc_img.getbuffer())
 
+            open_path = f_open.name
+            mlc_path = f_mlc.name
+
         try:
-            drmlc = DRMLC((f_open.name, f_mlc.name))
+            drmlc = DRMLC((open_path, mlc_path))
             drmlc.analyze(tolerance=tolerance)
             risultati = drmlc.results()
-
             st.text(risultati)
+
+            # Stampa dettagliata per ogni ROI, simile al tab DRGS
+            results_data = drmlc.results_data()
+            named_segments = getattr(results_data, "named_segment_data", None)
+
+            if named_segments:
+                st.markdown("### Risultati per ROI:")
+                for roi_name, segment_obj in named_segments.items():
+                    passed = getattr(segment_obj, "passed", None)
+                    x_pos = getattr(segment_obj, "x_position_mm", None)
+                    r_dev = getattr(segment_obj, "r_dev", None)
+
+                    st.markdown(f"**{roi_name}**")
+                    st.write(f"- Passed: {passed}")
+                    st.write(f"- Posizione X [mm]: {x_pos}")
+                    if r_dev is not None:
+                        st.write(f"- Deviazione R [%]: {float(r_dev):.3f}%")
+                    else:
+                        st.write("- Deviazione R: N/A")
+                    st.write("---")
+            else:
+                st.warning("Nessun dato ROI disponibile in results_data().")
+
             drmlc.plot_analyzed_image()
             st.pyplot(plt.gcf())
-            plt.clf()
+            plt.close()
 
             if utente.strip():
                 report_pdf = crea_report_pdf_senza_immagini("Dose Rate Leaf Speed", risultati, drmlc, utente, linac, energia)
@@ -221,10 +273,10 @@ with tab2:
                     mime="application/pdf"
                 )
             else:
-                st.warning("Inserisci il nome utente per generare il report.")
+                st.info("Inserisci il nome utente per abilitare il download del report PDF.")
+
         except Exception as e:
             st.error(f"Errore durante l'analisi DRLS: {e}")
-
 
 
 with tab3:
