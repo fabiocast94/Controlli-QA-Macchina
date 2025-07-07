@@ -5,3 +5,5 @@ matplotlib
 Pillow
 pylinac
 reportlab
+tempfile
+PyPDF2
