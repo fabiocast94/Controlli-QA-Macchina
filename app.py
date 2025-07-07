@@ -315,15 +315,13 @@ with tab3:
                     st.pyplot(plt.gcf())
                     plt.clf()
 
-                    test_name = ((pf_img.name).split(" ")[2])[:-4]
-
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
-                        report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + test_name, risultati, pf, utente, linac, energia)
+                        report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + pf_img.name, risultati, pf, utente, linac, energia)
                         pdf_file.write(report_pdf.getvalue())
                         pdf_paths.append(pdf_file.name)
 
                 except Exception as e:
-                    st.error(f"Errore durante l'analisi di {test_name}: {e}")
+                    st.error(f"Errore durante l'analisi di {pf_img.name}: {e}")
 
             if pdf_paths:
                 # Unione PDF
