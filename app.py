@@ -17,6 +17,8 @@ from io import BytesIO
 import tempfile
 import pydicom
 import math
+import tempfile
+from PyPDF2 import PdfMerger
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
@@ -280,10 +282,10 @@ with tab2:
 
 
 with tab3:
-    from pylinac.picketfence import MLC
+    from pylinac.picketfence import MLC, PicketFence
 
     st.header("Picket Fence")
-    pf_img = st.file_uploader("Carica immagine PicketFence.dcm", type=["dcm"])
+    pf_img_list = st.file_uploader("Carica immagine PicketFence.dcm", type=["dcm"], accept_multiple_files=True)
 
     # ✅ Aggiunta selezione tipo di MLC
     mlc_type_label = st.selectbox("Seleziona tipo di MLC", ["Millennium", "HD Millennium"])
@@ -292,32 +294,52 @@ with tab3:
     tolerance = st.number_input("Tolleranza (mm)", min_value=0.01, max_value=1.0, value=0.15, step=0.01)
     action_tolerance = st.number_input("Action tolerance (mm)", min_value=0.01, max_value=1.0, value=0.03, step=0.01)
 
-    if pf_img and st.button("Esegui analisi Picket Fence"):
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
-            f.write(pf_img.getbuffer())
+    if pf_img_list and st.button("Esegui analisi Picket Fence per tutti i file"):
+        if not utente.strip():
+            st.warning("Inserisci il nome utente per generare il report.")
+        else:
+            pdf_paths = []
+            for pf_img in pf_img_list:
+                with tempfile.NamedTemporaryFile(delete=False, suffix=".dcm") as f:
+                    f.write(pf_img.getbuffer())
+                    temp_dcm_path = f.name
 
-        try:
-            pf = PicketFence(f.name, mlc=mlc_type)
-            pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
-            risultati = pf.results()
+                try:
+                    pf = PicketFence(temp_dcm_path, mlc=mlc_type)
+                    pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
+                    risultati = pf.results()
 
-            st.text(risultati)
-            pf.plot_analyzed_image()
-            st.pyplot(plt.gcf())
-            plt.clf()
+                    st.subheader(f"Risultati per: {pf_img.name}")
+                    st.text(risultati)
+                    pf.plot_analyzed_image()
+                    st.pyplot(plt.gcf())
+                    plt.clf()
 
-            if utente.strip():
-                report_pdf = crea_report_pdf_senza_immagini("Picket Fence", risultati, pf, utente, linac, energia)
-                st.download_button(
-                    "📥 Scarica Report Picket Fence PDF",
-                    data=report_pdf,
-                    file_name="QA_Report_PicketFence.pdf",
-                    mime="application/pdf"
-                )
-            else:
-                st.warning("Inserisci il nome utente per generare il report.")
-        except Exception as e:
-            st.error(f"Errore durante l'analisi Picket Fence: {e}")
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
+                        report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + pf_img.name, risultati, pf, utente, linac, energia)
+                        pdf_file.write(report_pdf)
+                        pdf_paths.append(pdf_file.name)
+
+                except Exception as e:
+                    st.error(f"Errore durante l'analisi di {pf_img.name}: {e}")
+
+            if pdf_paths:
+                # Unione PDF
+                merged_pdf_path = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf").name
+                merger = PdfMerger()
+                for path in pdf_paths:
+                    merger.append(path)
+                merger.write(merged_pdf_path)
+                merger.close()
+
+                # Offri download unico
+                with open(merged_pdf_path, "rb") as final_pdf:
+                    st.download_button(
+                        "📥 Scarica Tutti i Report Picket Fence (PDF Unico)",
+                        data=final_pdf,
+                        file_name="QA_Report_PicketFence_Tutti.pdf",
+                        mime="application/pdf"
+                    )
 
 with tab4:
     st.header("Star Shot")
