@@ -315,6 +315,8 @@ with tab3:
                     st.pyplot(plt.gcf())
                     plt.clf()
 
+                    test_name = ((pf_img.name).split(" ")[2])[:-4]
+
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
                         report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + pf_img.name, risultati, pf, utente, linac, energia)
                         pdf_file.write(report_pdf.getvalue())
