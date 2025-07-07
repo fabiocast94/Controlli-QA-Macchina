@@ -317,7 +317,7 @@ with tab3:
 
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
                         report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + pf_img.name, risultati, pf, utente, linac, energia)
-                        pdf_file.write(report_pdf)
+                        pdf_file.write(report_pdf.getvalue())
                         pdf_paths.append(pdf_file.name)
 
                 except Exception as e:
