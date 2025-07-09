@@ -19,6 +19,7 @@ import pydicom
 import math
 import tempfile
 from PyPDF2 import PdfMerger
+#Ciao fabio è stato qui
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
