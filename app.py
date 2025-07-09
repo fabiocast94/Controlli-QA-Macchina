@@ -287,14 +287,6 @@ with tab3:
     st.header("Picket Fence")
     pf_img_list = st.file_uploader("Carica tutte le immagini PicketFence.dcm", type=["dcm"], accept_multiple_files=True)
 
-   
-    if pf_img_list: st.session_state['files'] = pf_img_list
-    
-    delete = st.button("🗑️ Clear files", type="primary")
-    if delete:
-        st.session_state['files'] = None
-        st.success("File eliminati con successo.")
-
     # ✅ Aggiunta selezione tipo di MLC
     mlc_type_label = st.selectbox("Seleziona tipo di MLC", ["Millennium", "HD Millennium"])
     mlc_type = MLC.MILLENNIUM if mlc_type_label == "Millennium" else MLC.HD_MILLENNIUM
