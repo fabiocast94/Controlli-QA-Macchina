@@ -309,7 +309,7 @@ with tab3:
                     pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
                     risultati = pf.results()
 
-                    st.subheader(f"Risultati per: {pf_img.name}")
+                    st.subheader(f"Risultati per: {(pf_img.name).split(".")[1]}")
                     st.text(risultati)
                     pf.plot_analyzed_image()
                     st.pyplot(plt.gcf())
