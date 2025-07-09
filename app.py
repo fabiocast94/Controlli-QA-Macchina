@@ -288,7 +288,7 @@ with tab3:
     pf_img_list = st.file_uploader("Carica tutte le immagini PicketFence.dcm", type=["dcm"], accept_multiple_files=True)
 
    
-    if pf_img_list: st.session_state['files'] = uploaded_files
+    if pf_img_list: st.session_state['files'] = pf_img_list
     
     delete = st.button("🗑️ Clear files", type="primary")
     if delete:
