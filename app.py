@@ -290,7 +290,7 @@ with tab3:
    
     if pf_img_list: st.session_state['files'] = uploaded_files
     
-    delete = st.button("🗑️ Elimina tutti i file", type="primary", help="Cancella i file caricati")
+    delete = st.button("🗑️ Clear files", type="primary")
     if delete:
         st.session_state['files'] = None
         st.success("File eliminati con successo.")
