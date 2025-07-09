@@ -19,7 +19,7 @@ import pydicom
 import math
 import tempfile
 from PyPDF2 import PdfMerger
-#Ciao fabio è stato qui
+
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
@@ -50,7 +50,7 @@ mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
 
 # DATI GENERALI
 utente = st.text_input("Nome Utente")
-linac = st.selectbox("Seleziona Linac", ["Linac 4791", "Edge", "Linac 6322", "Linac 1015", "STX", "Trilogy", "TrueBeam PIO"])
+linac = st.selectbox("Seleziona Linac", ["Linac 4791", "EDGE", "Linac 6322", "Linac 1015", "STX", "Trilogy", "TrueBeam PIO"])
 energia = st.selectbox("Seleziona Energia", ["6 MV", "10 MV", "15 MV", "6 FFF", "10 FFF"])
 
 # FUNZIONE PDF
@@ -84,6 +84,7 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
 
     y_start = height - 180
 
+    # Stampa generalità
     c.setFont("Helvetica-Bold", 14)
     c.drawString(50, y_start, f"Controlli Qualità LINAC - {titolo}")
     c.setFont("Helvetica", 12)
@@ -91,7 +92,8 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
     c.drawString(50, y_start - 40, f"Linac: {linac}")
     c.drawString(50, y_start - 60, f"Energia: {energia}")
     c.drawString(50, y_start - 80, f"Data: {datetime.date.today()}")
-
+    
+    # Stampa risultati analisi
     c.setFont("Helvetica-Bold", 12)
     c.drawString(50, y_start - 110, "Risultati Analisi:")
     c.setFont("Courier", 10)
