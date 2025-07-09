@@ -337,7 +337,7 @@ with tab3:
                     st.download_button(
                         "📥 Scarica Tutti i Report Picket Fence (PDF Unico)",
                         data=final_pdf,
-                        file_name="QA_Report_PicketFence_Tutti.pdf",
+                        file_name="QA_Report_PicketFence.pdf",
                         mime="application/pdf"
                     )
 
