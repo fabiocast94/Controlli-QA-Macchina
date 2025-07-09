@@ -49,7 +49,7 @@ mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
 
 # DATI GENERALI
 utente = st.text_input("Nome Utente")
-linac = st.selectbox("Seleziona Linac", ["Linac 4791", "Edge", "Linac 6322", "Linac 1015", "STx", "Trilogy", "TueBeam PIO"])
+linac = st.selectbox("Seleziona Linac", ["Linac 4791", "Edge", "Linac 6322", "Linac 1015", "STX", "Trilogy", "TrueBeam PIO"])
 energia = st.selectbox("Seleziona Energia", ["6 MV", "10 MV", "15 MV", "6 FFF", "10 FFF"])
 
 # FUNZIONE PDF
@@ -316,12 +316,12 @@ with tab3:
                     plt.clf()
 
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as pdf_file:
-                        report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + pf_img.name, risultati, pf, utente, linac, energia)
+                        report_pdf = crea_report_pdf_senza_immagini("Picket Fence " + (pf_img.name).split(".")[1], risultati, pf, utente, linac, energia)
                         pdf_file.write(report_pdf.getvalue())
                         pdf_paths.append(pdf_file.name)
 
                 except Exception as e:
-                    st.error(f"Errore durante l'analisi di {pf_img.name}: {e}")
+                    st.error(f"Errore durante l'analisi di {(pf_img.name).split(".")[1]}: {e}")
 
             if pdf_paths:
                 # Unione PDF
