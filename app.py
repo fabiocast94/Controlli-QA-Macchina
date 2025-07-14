@@ -312,7 +312,7 @@ with tab3:
                     pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
                     risultati = pf.results()
 
-                    print('qui')
+                    st.error("qui")
 
                     st.subheader(f"Risultati per: {((pf_img.name).split("RAQA."))[1].split(".dcm")[0]}")
                     st.text(risultati)
