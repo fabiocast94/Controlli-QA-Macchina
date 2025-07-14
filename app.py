@@ -309,7 +309,7 @@ with tab3:
 
                 try:
                     pf = PicketFence(temp_dcm_path, mlc=mlc_type)
-                    pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
+                    pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance, height_threshold=0.1)
                     risultati = pf.results()
 
                     st.subheader(f"Risultati per: {((pf_img.name).split("RAQA."))[1].split(".dcm")[0]}")
