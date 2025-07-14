@@ -308,7 +308,7 @@ with tab3:
                     temp_dcm_path = f.name
 
                 try:
-                    pf = PicketFence(temp_dcm_path, mlc=mlc_type, filter=5)
+                    pf = PicketFence(temp_dcm_path, mlc=mlc_type, invert=True)
                     pf.analyze(tolerance=tolerance, action_tolerance=action_tolerance)
                     risultati = pf.results()
 
