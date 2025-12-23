@@ -4,7 +4,8 @@ from pylinac.core.image import DicomImage
 import streamlit as st
 from pylinac import DRMLC
 import matplotlib.pyplot as plt
-from pylinac import DRGS, PicketFence, Starshot, CatPhan504, WinstonLutz, FieldAnalysis
+from pylinac import DRGS, PicketFence, Starshot, WinstonLutz, FieldAnalysis
+from pylinac.catphan import CatPhanBase, CatPhan504, CatPhan600
 from pylinac.field_analysis import Interpolation, Normalization, Centering
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -19,6 +20,7 @@ import pydicom
 import math
 
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
+
 
 # CONFIGURAZIONE PAGINA
 st.set_page_config(page_title="Controlli Qualità LINAC", layout="wide")
@@ -352,13 +354,19 @@ with tab4:
 with tab5:
     st.header("CBCT CatPhan")
 
-    uploaded_file = st.file_uploader("Carica un file ZIP contenente immagini DICOM", type="zip")
+    # 🔽 Selezione modello
+    catphan_model = st.selectbox(
+        "Seleziona modello CatPhan",
+        ["Auto (consigliato)", "CatPhan 504", "CatPhan 600"]
+    )
+
+    uploaded_file = st.file_uploader(
+        "Carica un file ZIP contenente immagini DICOM",
+        type="zip"
+    )
 
     if uploaded_file and st.button("Esegui analisi CatPhan"):
-        import tempfile
         import zipfile
-        import os
-        import pydicom
 
         with tempfile.TemporaryDirectory() as temp_dir:
             zip_path = os.path.join(temp_dir, "upload.zip")
@@ -370,50 +378,68 @@ with tab5:
                     zip_ref.extractall(temp_dir)
             except zipfile.BadZipFile:
                 st.error("Il file caricato non è un archivio ZIP valido.")
-            else:
-                dicom_files = []
-                for root, _, files in os.walk(temp_dir):
-                    for file in files:
-                        if file.lower().endswith('.dcm'):
-                            dicom_files.append(os.path.join(root, file))
+                st.stop()
 
-                if not dicom_files:
-                    st.error("Nessun file DICOM trovato nello ZIP.")
+            dicom_files = []
+            for root, _, files in os.walk(temp_dir):
+                for file in files:
+                    if file.lower().endswith(".dcm"):
+                        dicom_files.append(os.path.join(root, file))
+
+            if not dicom_files:
+                st.error("Nessun file DICOM trovato nello ZIP.")
+                st.stop()
+
+            st.success(f"Trovati {len(dicom_files)} file DICOM.")
+
+            try:
+                ds = pydicom.dcmread(dicom_files[0])
+                st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
+                st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
+                st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
+
+                # ==========================
+                # Inizializzazione CatPhan
+                # ==========================
+                if catphan_model == "CatPhan 504":
+                    catphan = CatPhan504(dicom_files)
+                    modello_usato = "CatPhan 504 (forzato)"
+
+                elif catphan_model == "CatPhan 600":
+                    catphan = CatPhan600(dicom_files)
+                    modello_usato = "CatPhan 600 (forzato)"
+
                 else:
-                    st.success(f"Trovati {len(dicom_files)} file DICOM.")
+                    catphan = CatPhanBase.from_dicom_images(dicom_files)
+                    modello_usato = f"{catphan.model} (auto)"
 
-                    try:
-                        ds = pydicom.dcmread(dicom_files[0])
-                        st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
-                        st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
-                        st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
-                        # Qui puoi aggiungere ulteriori analisi con pylinac CatPhan504
-                        # Esempio base di inizializzazione CatPhan:
-                        catphan = CatPhan504(dicom_files)
-                        catphan.analyze()
-                        risultati = catphan.results()
+                st.info(f"Modello CatPhan utilizzato: {modello_usato}")
 
-                        st.text(risultati)
-                        catphan.plot_analyzed_image()
-                        st.pyplot(plt.gcf())
-                        plt.clf()
+                catphan.analyze()
+                risultati = catphan.results()
 
-                        if utente.strip():
-                            report_pdf = crea_report_pdf_senza_immagini("CBCT CatPhan", risultati, catphan, utente, linac, energia)
-                            st.download_button(
-                                "📥 Scarica Report CBCT CatPhan PDF",
-                                data=report_pdf,
-                                file_name="QA_Report_CBCT_CatPhan.pdf",
-                                mime="application/pdf"
-                            )
-                        else:
-                            st.warning("Inserisci il nome utente per generare il report.")
+                st.text(risultati)
 
-                    except Exception as e:
-                        st.error(f"Errore durante l'analisi CBCT CatPhan: {e}")
+                catphan.plot_analyzed_image()
+                st.pyplot(plt.gcf())
+                plt.clf()
 
+                if utente.strip():
+                    titolo = f"CBCT CatPhan – {modello_usato}"
+                    report_pdf = crea_report_pdf_senza_immagini(
+                        titolo, risultati, catphan, utente, linac, energia
+                    )
+                    st.download_button(
+                        "📥 Scarica Report CBCT CatPhan PDF",
+                        data=report_pdf,
+                        file_name="QA_Report_CBCT_CatPhan.pdf",
+                        mime="application/pdf"
+                    )
+                else:
+                    st.warning("Inserisci il nome utente per generare il report.")
 
-
+            except Exception as e:
+                st.error(f"Errore durante l'analisi CBCT CatPhan: {e}")
 
 with tab6:
     st.header("Winston Lutz")
@@ -621,6 +647,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
