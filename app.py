@@ -4,8 +4,8 @@ from pylinac.core.image import DicomImage
 import streamlit as st
 from pylinac import DRMLC
 import matplotlib.pyplot as plt
-from pylinac import DRGS, PicketFence, Starshot, WinstonLutz, FieldAnalysis
-from pylinac.catphan import CatPhanBase
+from pylinac import DRGS, PicketFence, Starshot, WinstonLutz, FieldAnalysis, CatPhan504, CatPhan600
+# from pylinac.catphan import CatPhanBase
 from pylinac.field_analysis import Interpolation, Normalization, Centering
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -648,6 +648,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
