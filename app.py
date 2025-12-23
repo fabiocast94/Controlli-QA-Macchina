@@ -5,7 +5,6 @@ import streamlit as st
 from pylinac import DRMLC
 import matplotlib.pyplot as plt
 from pylinac import DRGS, PicketFence, Starshot, WinstonLutz, FieldAnalysis, CatPhan504, CatPhan600
-# from pylinac.catphan import CatPhanBase
 from pylinac.field_analysis import Interpolation, Normalization, Centering
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import A4
@@ -357,10 +356,7 @@ with tab5:
     # Selezione modello CatPhan
     catphan_model = st.selectbox(
         "Seleziona modello CatPhan",
-        [
-            "Auto (consigliato – supporta CatPhan 504 / 600)",
-            "CatPhan 504 (forzato)"
-        ]
+        ["CatPhan 504", "CatPhan 600"]
     )
 
     uploaded_file = st.file_uploader(
@@ -376,6 +372,7 @@ with tab5:
             with open(zip_path, "wb") as f:
                 f.write(uploaded_file.getbuffer())
 
+            # Estrazione ZIP
             try:
                 with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(temp_dir)
@@ -383,12 +380,13 @@ with tab5:
                 st.error("Il file caricato non è un archivio ZIP valido.")
                 st.stop()
 
-            # Raccolta DICOM
-            dicom_files = []
-            for root, _, files in os.walk(temp_dir):
-                for file in files:
-                    if file.lower().endswith(".dcm"):
-                        dicom_files.append(os.path.join(root, file))
+            # Raccolta file DICOM
+            dicom_files = [
+                os.path.join(root, file)
+                for root, _, files in os.walk(temp_dir)
+                for file in files
+                if file.lower().endswith(".dcm")
+            ]
 
             if not dicom_files:
                 st.error("Nessun file DICOM trovato nello ZIP.")
@@ -396,21 +394,25 @@ with tab5:
 
             st.success(f"Trovati {len(dicom_files)} file DICOM.")
 
+            # Mostra info del primo DICOM
             try:
                 ds = pydicom.dcmread(dicom_files[0])
                 st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
                 st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
                 st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
+            except Exception:
+                pass
 
-                # ==========================
-                # Inizializzazione CatPhan
-                # ==========================
-                if "504" in catphan_model:
+            # ==========================
+            # Inizializzazione CatPhan
+            # ==========================
+            try:
+                if catphan_model == "CatPhan 504":
                     catphan = CatPhan504(dicom_files)
-                    modello_usato = "CatPhan 504 (forzato)"
-                else:
-                    catphan = CatPhanBase.from_dicom_images(dicom_files)
-                    modello_usato = f"{catphan.model} (auto)"
+                    modello_usato = "CatPhan 504"
+                else:  # CatPhan 600
+                    catphan = CatPhan600(dicom_files)
+                    modello_usato = "CatPhan 600"
 
                 st.info(f"Modello CatPhan utilizzato: {modello_usato}")
 
@@ -420,11 +422,12 @@ with tab5:
 
                 st.text(risultati)
 
+                # Mostra immagine analizzata
                 catphan.plot_analyzed_image()
                 st.pyplot(plt.gcf())
                 plt.clf()
 
-                # Report PDF
+                # Generazione report PDF
                 if utente.strip():
                     titolo = f"CBCT CatPhan – {modello_usato}"
                     report_pdf = crea_report_pdf_senza_immagini(
@@ -648,6 +651,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
