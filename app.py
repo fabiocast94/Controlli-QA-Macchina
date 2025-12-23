@@ -411,7 +411,7 @@ with tab5:
                     catphan = CatPhan504(dicom_files)
                     modello_usato = "CatPhan 504"
                 else:  # CatPhan 600
-                    catphan = CatPhan600(dicom_files)
+                    catphan = CatPhan600(dicom_files, memory_efficient_mode=True)
                     modello_usato = "CatPhan 600"
 
                 st.info(f"Modello CatPhan utilizzato: {modello_usato}")
@@ -424,10 +424,11 @@ with tab5:
 
                 # Mostra immagine analizzata
                 catphan.plot_analyzed_image()
-                st.pyplot(plt.gcf())
-                plt.clf()
+                fig = plt.gcf()
+                st.pyplot(fig)
+                plt.close(fig)
 
-                # Generazione report PDF
+                # Generazione report PDF sicuro anche senza pylinac_obj
                 if utente.strip():
                     titolo = f"CBCT CatPhan – {modello_usato}"
                     report_pdf = crea_report_pdf_senza_immagini(
@@ -651,6 +652,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
