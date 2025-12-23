@@ -352,6 +352,9 @@ with tab4:
 with tab5:
     st.header("CBCT CatPhan")
 
+    # Selezione modello CatPhan
+    catphan_model = st.selectbox("Seleziona modello CatPhan", ["CatPhan504", "CatPhan600"])
+
     uploaded_file = st.file_uploader("Carica un file ZIP contenente immagini DICOM", type="zip")
 
     if uploaded_file and st.button("Esegui analisi CatPhan"):
@@ -387,9 +390,13 @@ with tab5:
                         st.write(f"**Patient Name:** {ds.get('PatientName', 'N/A')}")
                         st.write(f"**Study Date:** {ds.get('StudyDate', 'N/A')}")
                         st.write(f"**Modality:** {ds.get('Modality', 'N/A')}")
-                        # Qui puoi aggiungere ulteriori analisi con pylinac CatPhan504
-                        # Esempio base di inizializzazione CatPhan:
-                        catphan = CatPhan504(dicom_files)
+
+                        # Analisi CatPhan selezionata
+                        if catphan_model == "CatPhan504":
+                            catphan = CatPhan504(dicom_files)
+                        else:
+                            catphan = CatPhan600(dicom_files)
+
                         catphan.analyze()
                         risultati = catphan.results()
 
@@ -399,11 +406,13 @@ with tab5:
                         plt.clf()
 
                         if utente.strip():
-                            report_pdf = crea_report_pdf_senza_immagini("CBCT CatPhan", risultati, catphan, utente, linac, energia)
+                            report_pdf = crea_report_pdf_senza_immagini(
+                                f"CBCT {catphan_model}", risultati, catphan, utente, linac, energia
+                            )
                             st.download_button(
-                                "📥 Scarica Report CBCT CatPhan PDF",
+                                "📥 Scarica Report CBCT PDF",
                                 data=report_pdf,
-                                file_name="QA_Report_CBCT_CatPhan.pdf",
+                                file_name=f"QA_Report_CBCT_{catphan_model}.pdf",
                                 mime="application/pdf"
                             )
                         else:
@@ -618,6 +627,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
