@@ -354,10 +354,13 @@ with tab4:
 with tab5:
     st.header("CBCT CatPhan")
 
-    # 🔽 Selezione modello
+    # Selezione modello CatPhan
     catphan_model = st.selectbox(
         "Seleziona modello CatPhan",
-        ["Auto (consigliato)", "CatPhan 504", "CatPhan 600"]
+        [
+            "Auto (consigliato – supporta CatPhan 504 / 600)",
+            "CatPhan 504 (forzato)"
+        ]
     )
 
     uploaded_file = st.file_uploader(
@@ -374,12 +377,13 @@ with tab5:
                 f.write(uploaded_file.getbuffer())
 
             try:
-                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                with zipfile.ZipFile(zip_path, "r") as zip_ref:
                     zip_ref.extractall(temp_dir)
             except zipfile.BadZipFile:
                 st.error("Il file caricato non è un archivio ZIP valido.")
                 st.stop()
 
+            # Raccolta DICOM
             dicom_files = []
             for root, _, files in os.walk(temp_dir):
                 for file in files:
@@ -401,20 +405,16 @@ with tab5:
                 # ==========================
                 # Inizializzazione CatPhan
                 # ==========================
-                if catphan_model == "CatPhan 504":
+                if "504" in catphan_model:
                     catphan = CatPhan504(dicom_files)
                     modello_usato = "CatPhan 504 (forzato)"
-
-                elif catphan_model == "CatPhan 600":
-                    catphan = CatPhan600(dicom_files)
-                    modello_usato = "CatPhan 600 (forzato)"
-
                 else:
                     catphan = CatPhanBase.from_dicom_images(dicom_files)
                     modello_usato = f"{catphan.model} (auto)"
 
                 st.info(f"Modello CatPhan utilizzato: {modello_usato}")
 
+                # Analisi
                 catphan.analyze()
                 risultati = catphan.results()
 
@@ -424,6 +424,7 @@ with tab5:
                 st.pyplot(plt.gcf())
                 plt.clf()
 
+                # Report PDF
                 if utente.strip():
                     titolo = f"CBCT CatPhan – {modello_usato}"
                     report_pdf = crea_report_pdf_senza_immagini(
@@ -647,6 +648,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
