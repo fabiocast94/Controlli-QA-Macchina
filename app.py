@@ -43,7 +43,7 @@ def mostra_logo_e_titolo(logo_path, titolo):
         unsafe_allow_html=True
     )
 
-mostra_logo_e_titolo(logo_file_path, "Controlli Qualità LINAC")
+mostra_logo_e_titolo(logo_file_path, "Machine QA")
 
 # DATI GENERALI
 utente = st.text_input("Nome Utente")
@@ -82,7 +82,7 @@ def crea_report_pdf_senza_immagini(titolo, risultati, pylinac_obj, utente, linac
     y_start = height - 180
 
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, y_start, f"Controlli Qualità LINAC - {titolo}")
+    c.drawString(50, y_start, f"Machine QA - {titolo}")
     c.setFont("Helvetica", 12)
     c.drawString(50, y_start - 20, f"Utente: {utente}")
     c.drawString(50, y_start - 40, f"Linac: {linac}")
@@ -627,6 +627,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
