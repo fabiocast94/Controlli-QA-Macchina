@@ -401,9 +401,9 @@ with tab5:
                         risultati = catphan.results()
 
                         st.text(risultati)
-                        catphan.plot_analyzed_image()
-                        st.pyplot(plt.gcf())
-                        plt.clf()
+                        # catphan.plot_analyzed_image()
+                        # st.pyplot(plt.gcf())
+                        # plt.clf()
 
                         if utente.strip():
                             report_pdf = crea_report_pdf_senza_immagini(
@@ -627,6 +627,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
