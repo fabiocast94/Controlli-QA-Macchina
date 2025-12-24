@@ -21,7 +21,7 @@ import math
 warnings.filterwarnings("ignore", category=PendingDeprecationWarning)
 
 # CONFIGURAZIONE PAGINA
-st.set_page_config(page_title="Controlli Qualità LINAC", layout="wide")
+st.set_page_config(page_title="Machine QA", layout="wide")
 
 # LOGO + TITOLO
 logo_file_path = "logo.png"
@@ -627,6 +627,7 @@ with tab8:
 
         except Exception as e:
             st.error(f"Errore durante il calcolo Wedge Angle: {e}")
+
 
 
 
